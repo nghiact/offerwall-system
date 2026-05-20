@@ -1,0 +1,24 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: eligibility-service
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+services:
+  user-service:
+    url: http://localhost:8081
+  offer-service:
+    url: http://localhost:8082
+
+app:
+  rabbitmq:
+    exchange: offerwall.exchange
+    routing-key: offer.eligibility.checked
+    queue: offer.eligibility.checked.queue

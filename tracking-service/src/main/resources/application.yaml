@@ -1,0 +1,28 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: tracking-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5433/offerwall_tracking
+    username: postgres
+    password: postgres
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+app:
+  rabbitmq:
+    exchange: offerwall.exchange
+    routing-key: offer.eligibility.checked
+    queue: offer.eligibility.checked.queue

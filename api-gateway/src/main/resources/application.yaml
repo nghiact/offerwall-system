@@ -1,0 +1,35 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.reactive.ReactiveUserDetailsServiceAutoConfiguration
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: user-service
+              uri: http://localhost:8081
+              predicates:
+                - Path=/api/users/**
+
+            - id: offer-service
+              uri: http://localhost:8082
+              predicates:
+                - Path=/api/offers/**
+
+            - id: eligibility-service
+              uri: http://localhost:8083
+              predicates:
+                - Path=/api/eligibility/**
+
+            - id: tracking-service
+              uri: http://localhost:8084
+              predicates:
+                - Path=/api/tracking/**
