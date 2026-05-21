@@ -20,10 +20,12 @@
     <modules>
         <module>common-lib</module>
         <module>user-service</module>
+        <module>card-service</module>
         <module>api-gateway</module>
         <module>eligibility-service</module>
         <module>offer-service</module>
         <module>tracking-service</module>
+        <module>notification-service</module>
     </modules>
 
     <properties>

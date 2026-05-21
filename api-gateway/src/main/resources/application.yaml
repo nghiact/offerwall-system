@@ -33,3 +33,13 @@ spring:
               uri: http://localhost:8084
               predicates:
                 - Path=/api/tracking/**
+
+            - id: card-service
+              uri: http://localhost:8085
+              predicates:
+                - Path=/api/cards/**
+
+            - id: notification-service
+              uri: http://localhost:8086
+              predicates:
+                - Path=/api/notifications/**
