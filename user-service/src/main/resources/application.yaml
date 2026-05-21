@@ -6,7 +6,7 @@ spring:
     name: user-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/offerwall_user
+    url: jdbc:postgresql://localhost:5432/offerwall_user
     username: postgres
     password: postgres
 

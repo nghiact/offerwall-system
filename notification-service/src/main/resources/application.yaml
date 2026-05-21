@@ -6,7 +6,7 @@ spring:
     name: notification-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/offerwall_notification
+    url: jdbc:postgresql://localhost:5432/offerwall_notification
     username: postgres
     password: postgres
 
