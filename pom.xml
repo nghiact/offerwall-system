@@ -37,6 +37,11 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
+                <groupId>com.ctn.offerwall</groupId>
+                <artifactId>common-lib</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-dependencies</artifactId>
                 <version>${spring-cloud.version}</version>

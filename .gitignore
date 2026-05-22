@@ -36,5 +36,8 @@ build/
 ### VS Code ###
 .vscode/
 
+### Project docs generated during planning ###
+docs/
+
 ### Mac OS ###
 .DS_Store
