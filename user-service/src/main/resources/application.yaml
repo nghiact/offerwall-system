@@ -33,3 +33,6 @@ offerwall:
     defaults:
       notification-email-enabled: false
       notification-in-app-enabled: true
+  security:
+    internal:
+      api-key:

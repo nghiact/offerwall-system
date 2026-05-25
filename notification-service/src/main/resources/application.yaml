@@ -27,3 +27,19 @@ app:
     exchange: offerwall.exchange
     routing-key: notification.event
     queue: notification.event.queue
+
+offerwall:
+  clients:
+    tracking:
+      base-url: http://localhost:8084
+    offer:
+      base-url: http://localhost:8082
+    user:
+      base-url: http://localhost:8081
+  security:
+    jwt:
+      issuer: offerwall-user-service
+      audience: offerwall-api
+      require-signature: false
+    internal:
+      api-key:
