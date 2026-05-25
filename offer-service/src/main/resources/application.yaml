@@ -22,3 +22,7 @@ offerwall:
       issuer: offerwall-user-service
       audience: offerwall-api
       require-signature: false
+  tracking:
+    enabled: true
+    base-url: http://localhost:8084
+    fail-on-error: false

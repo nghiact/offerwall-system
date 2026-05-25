@@ -54,8 +54,8 @@ public class OfferController {
     @ResponseStatus(HttpStatus.CREATED)
     public OfferResponse create(@RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authorization,
                                 @Valid @RequestBody OfferRequest request) {
-        securityService.requireEditorOrAdmin(authorization);
-        return offerService.createOffer(request);
+        String actorUserId = securityService.requireEditorOrAdmin(authorization);
+        return offerService.createOffer(request, actorUserId);
     }
 
     @PutMapping("/{id}")

@@ -37,11 +37,12 @@ public class OfferSecurityService {
         }
     }
 
-    public void requireEditorOrAdmin(String authorizationHeader) {
+    public String requireEditorOrAdmin(String authorizationHeader) {
         JWTClaimsSet claims = parseClaims(extractBearerToken(authorizationHeader));
         if (roles(claims).stream().noneMatch(WRITE_ROLES::contains)) {
             throw new AuthorizationDeniedException("Admin or editor role is required.");
         }
+        return claims.getSubject();
     }
 
     private String extractBearerToken(String authorizationHeader) {

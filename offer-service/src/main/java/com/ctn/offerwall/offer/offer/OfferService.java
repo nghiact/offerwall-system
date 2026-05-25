@@ -1,5 +1,10 @@
 package com.ctn.offerwall.offer.offer;
 
+import com.ctn.offerwall.common.event.BusinessEvent;
+import com.ctn.offerwall.common.event.EntityType;
+import com.ctn.offerwall.common.event.EventMetadata;
+import com.ctn.offerwall.common.event.EventOutcome;
+import com.ctn.offerwall.common.event.EventType;
 import com.ctn.offerwall.common.offer.OfferEligibilityMode;
 import com.ctn.offerwall.common.offer.OfferType;
 import com.ctn.offerwall.offer.domain.Offer;
@@ -12,6 +17,7 @@ import com.ctn.offerwall.offer.offer.dto.OfferRequest;
 import com.ctn.offerwall.offer.offer.dto.OfferResponse;
 import com.ctn.offerwall.offer.repository.OfferCategoryRepository;
 import com.ctn.offerwall.offer.repository.OfferRepository;
+import com.ctn.offerwall.offer.tracking.BusinessEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +26,7 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -28,11 +35,15 @@ public class OfferService {
 
     private final OfferRepository offerRepository;
     private final OfferCategoryRepository categoryRepository;
+    private final BusinessEventPublisher eventPublisher;
     private final Clock clock = Clock.systemUTC();
 
-    public OfferService(OfferRepository offerRepository, OfferCategoryRepository categoryRepository) {
+    public OfferService(OfferRepository offerRepository,
+                        OfferCategoryRepository categoryRepository,
+                        BusinessEventPublisher eventPublisher) {
         this.offerRepository = offerRepository;
         this.categoryRepository = categoryRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -61,7 +72,7 @@ public class OfferService {
     }
 
     @Transactional
-    public OfferResponse createOffer(OfferRequest request) {
+    public OfferResponse createOffer(OfferRequest request, String actorUserId) {
         OfferCategory category = findCategory(request.categoryId());
         validateRequest(request);
         Set<UUID> targetCardProductIds = normalizeTargetCardProductIds(request.targetCardProductIds());
@@ -83,7 +94,9 @@ public class OfferService {
                 request.targetType(),
                 request.targetPersonal()
         );
-        return toResponse(offerRepository.save(offer), Instant.now(clock));
+        Offer savedOffer = offerRepository.save(offer);
+        publishOfferCreated(savedOffer, actorUserId);
+        return toResponse(savedOffer, Instant.now(clock));
     }
 
     @Transactional
@@ -131,6 +144,24 @@ public class OfferService {
 
     private OfferResponse toResponse(Offer offer, Instant now) {
         return OfferResponse.from(offer, offer.statusAt(now));
+    }
+
+    private void publishOfferCreated(Offer offer, String actorUserId) {
+        eventPublisher.publish(new BusinessEvent(
+                null,
+                EventType.OFFER_CREATED,
+                EventOutcome.SUCCESS,
+                EntityType.OFFER,
+                offer.getId().toString(),
+                actorUserId,
+                null,
+                new EventMetadata(Map.of(
+                        "categoryId", offer.getCategory().getId().toString(),
+                        "merchantName", offer.getMerchantName(),
+                        "offerType", offer.getOfferType().name(),
+                        "eligibilityMode", offer.getEligibilityMode().name()
+                ))
+        ));
     }
 
     private void validateRequest(OfferRequest request) {

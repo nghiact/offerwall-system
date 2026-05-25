@@ -1,5 +1,10 @@
 package com.ctn.offerwall.offer.offer;
 
+import com.ctn.offerwall.common.event.BusinessEvent;
+import com.ctn.offerwall.common.event.EntityType;
+import com.ctn.offerwall.common.event.EventOutcome;
+import com.ctn.offerwall.common.event.EventType;
+import com.ctn.offerwall.offer.tracking.BusinessEventPublisher;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -8,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,7 +21,11 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -28,9 +38,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class OfferControllerIntegrationTests {
 
-    private static final String ADMIN_AUTHORIZATION = "Bearer " + accessToken("ADMIN");
-    private static final String EDITOR_AUTHORIZATION = "Bearer " + accessToken("EDITOR");
-    private static final String USER_AUTHORIZATION = "Bearer " + accessToken("USER");
+    private static final String ADMIN_USER_ID = UUID.randomUUID().toString();
+    private static final String EDITOR_USER_ID = UUID.randomUUID().toString();
+    private static final String USER_ID = UUID.randomUUID().toString();
+    private static final String ADMIN_AUTHORIZATION = "Bearer " + accessToken("ADMIN", ADMIN_USER_ID);
+    private static final String EDITOR_AUTHORIZATION = "Bearer " + accessToken("EDITOR", EDITOR_USER_ID);
+    private static final String USER_AUTHORIZATION = "Bearer " + accessToken("USER", USER_ID);
 
     @Autowired
     private MockMvc mockMvc;
@@ -38,13 +51,16 @@ class OfferControllerIntegrationTests {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @MockitoBean
+    private BusinessEventPublisher eventPublisher;
+
     @Test
     void createsOfferAndFiltersList() throws Exception {
         String suffix = UUID.randomUUID().toString();
         JsonNode category = createCategory("dining-" + suffix, "Dining " + suffix);
         String merchantName = "Stage5 Merchant " + suffix;
 
-        mockMvc.perform(post("/api/offers")
+        String offerResponse = mockMvc.perform(post("/api/offers")
                         .header(HttpHeaders.AUTHORIZATION, ADMIN_AUTHORIZATION)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(offerJson(category.get("id").asText(), merchantName, "BOTH", "ALL", null, null, null)))
@@ -53,7 +69,22 @@ class OfferControllerIntegrationTests {
                 .andExpect(jsonPath("$.category.id").value(category.get("id").asText()))
                 .andExpect(jsonPath("$.offerType").value("BOTH"))
                 .andExpect(jsonPath("$.eligibilityMode").value("ALL"))
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode offer = objectMapper.readTree(offerResponse);
+        verify(eventPublisher, atLeastOnce()).publish(any(BusinessEvent.class));
+        verify(eventPublisher).publish(org.mockito.ArgumentMatchers.argThat(event ->
+                event.eventType() == EventType.OFFER_CREATED
+                        && event.outcome() == EventOutcome.SUCCESS
+                        && event.entityType() == EntityType.OFFER
+                        && offer.get("id").asText().equals(event.entityId())
+                        && ADMIN_USER_ID.equals(event.actorUserId())
+                        && category.get("id").asText().equals(event.metadata().get("categoryId"))
+                        && merchantName.equals(event.metadata().get("merchantName"))
+        ));
 
         mockMvc.perform(get("/api/offers")
                         .param("keyword", suffix)
@@ -230,7 +261,7 @@ class OfferControllerIntegrationTests {
         );
     }
 
-    private static String accessToken(String role) {
+    private static String accessToken(String role, String subject) {
         String header = base64Url("""
                 {"alg":"RS256","typ":"JWT","kid":"local-dev"}
                 """);
@@ -242,7 +273,7 @@ class OfferControllerIntegrationTests {
                   "exp": %d,
                   "roles": ["%s"]
                 }
-                """.formatted(UUID.randomUUID(), Instant.now().plusSeconds(3600).getEpochSecond(), role));
+                """.formatted(subject, Instant.now().plusSeconds(3600).getEpochSecond(), role));
         return header + "." + payload + ".signature";
     }
 
