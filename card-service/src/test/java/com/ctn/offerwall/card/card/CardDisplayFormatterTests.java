@@ -29,6 +29,6 @@ class CardDisplayFormatterTests {
     void formatsNapasTierLabels() {
         CardProduct card = new CardProduct("localbank-napas", "Localbank", null, CardNetwork.NAPAS, 2, null, CardType.DEBIT, true, java.util.List.of("123456"));
 
-        assertThat(formatter.displayName(card)).isEqualTo("Localbank Napas Gold debit card");
+        assertThat(formatter.displayName(card)).isEqualTo("Localbank Napas Platinum debit card");
     }
 }

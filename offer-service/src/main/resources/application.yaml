@@ -14,3 +14,11 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+    open-in-view: false
+
+offerwall:
+  security:
+    jwt:
+      issuer: offerwall-user-service
+      audience: offerwall-api
+      require-signature: false
