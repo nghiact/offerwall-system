@@ -23,7 +23,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(properties = "offerwall.security.internal.api-key=stage-8-internal")
+@SpringBootTest(properties = {
+        "offerwall.security.internal.api-key=stage-8-internal",
+        "offerwall.tracking.enabled=false"
+})
 @AutoConfigureMockMvc
 @Transactional
 class NotificationRecipientControllerIntegrationTests {

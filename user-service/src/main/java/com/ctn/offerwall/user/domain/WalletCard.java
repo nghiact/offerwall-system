@@ -51,4 +51,20 @@ public class WalletCard {
     void prePersist() {
         createdAt = Instant.now();
     }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public AppUser getUser() {
+        return user;
+    }
+
+    public String getCardId() {
+        return cardId;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }
