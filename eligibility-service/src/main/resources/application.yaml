@@ -20,11 +20,11 @@ services:
 offerwall:
   security:
     internal:
-      api-key:
+      api-key: ${OFFERWALL_INTERNAL_API_KEY:local-dev-internal-key}
   clients:
     card:
       base-url: http://localhost:8085
-      internal-api-key:
+      internal-api-key: ${OFFERWALL_INTERNAL_API_KEY:local-dev-internal-key}
 
 app:
   rabbitmq:

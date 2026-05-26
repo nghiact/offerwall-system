@@ -42,4 +42,4 @@ offerwall:
       audience: offerwall-api
       require-signature: false
     internal:
-      api-key:
+      api-key: ${OFFERWALL_INTERNAL_API_KEY:local-dev-internal-key}

@@ -19,7 +19,7 @@ spring:
 offerwall:
   security:
     internal:
-      api-key:
+      api-key: ${OFFERWALL_INTERNAL_API_KEY:local-dev-internal-key}
     jwt:
       issuer: offerwall-user-service
       audience: offerwall-api

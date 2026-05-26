@@ -5,7 +5,8 @@ import com.ctn.offerwall.common.event.EntityType;
 import com.ctn.offerwall.common.event.EventOutcome;
 import com.ctn.offerwall.common.event.EventType;
 import com.ctn.offerwall.offer.eligibility.EligibilityClient;
-import com.ctn.offerwall.offer.eligibility.dto.OfferEligibilityRequest;
+import com.ctn.offerwall.offer.eligibility.dto.BulkOfferEligibilityRequest;
+import com.ctn.offerwall.offer.eligibility.dto.OfferEligibilityResult;
 import com.ctn.offerwall.offer.tracking.BusinessEventPublisher;
 import com.ctn.offerwall.offer.user.UserWalletClient;
 import com.ctn.offerwall.offer.user.dto.UserWalletCandidate;
@@ -145,11 +146,14 @@ class OfferControllerIntegrationTests {
 
         when(userWalletClient.getWalletCandidate(userId))
                 .thenReturn(new UserWalletCandidate(userId, List.of(matchingCardProductId)));
-        when(eligibilityClient.resolveEligibleUsers(any(OfferEligibilityRequest.class))).thenAnswer(invocation -> {
-            OfferEligibilityRequest request = invocation.getArgument(0);
-            return request.targetCardProductIds().contains(matchingCardProductId)
-                    ? List.of(userId)
-                    : List.of();
+        when(eligibilityClient.resolveEligibleOffers(any(BulkOfferEligibilityRequest.class))).thenAnswer(invocation -> {
+            BulkOfferEligibilityRequest request = invocation.getArgument(0);
+            return request.offers().stream()
+                    .map(offer -> new OfferEligibilityResult(
+                            offer.offerId(),
+                            offer.targetCardProductIds().contains(matchingCardProductId) ? List.of(userId) : List.of()
+                    ))
+                    .toList();
         });
 
         mockMvc.perform(post("/api/offers")

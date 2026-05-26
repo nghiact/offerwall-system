@@ -2,10 +2,15 @@ package com.ctn.offerwall.eligibility.eligibility;
 
 import com.ctn.offerwall.common.card.CardNetwork;
 import com.ctn.offerwall.common.card.CardType;
+import com.ctn.offerwall.common.offer.OfferEligibilityMode;
 import com.ctn.offerwall.eligibility.card.CardProductClient;
 import com.ctn.offerwall.eligibility.card.CardProductSummary;
+import com.ctn.offerwall.eligibility.eligibility.dto.BulkOfferEligibilityRequest;
+import com.ctn.offerwall.eligibility.eligibility.dto.BulkOfferEligibilityResponse;
+import com.ctn.offerwall.eligibility.eligibility.dto.OfferEligibilityCheckRequest;
 import com.ctn.offerwall.eligibility.eligibility.dto.OfferEligibilityRequest;
 import com.ctn.offerwall.eligibility.eligibility.dto.OfferEligibilityResponse;
+import com.ctn.offerwall.eligibility.eligibility.dto.OfferEligibilityResult;
 import com.ctn.offerwall.eligibility.eligibility.dto.UserWalletCandidate;
 import com.ctn.offerwall.eligibility.exception.UserInputException;
 import org.springframework.stereotype.Service;
@@ -31,12 +36,37 @@ public class OfferEligibilityService {
 
     public OfferEligibilityResponse resolveUsers(OfferEligibilityRequest request) {
         validateRequest(request);
-        List<UUID> eligibleUserIds = switch (request.eligibilityMode()) {
+        Map<UUID, CardProductSummary> criteriaCardsById = request.eligibilityMode() == OfferEligibilityMode.CRITERIA
+                ? lookupCriteriaCards(request.candidates())
+                : Map.of();
+        return new OfferEligibilityResponse(resolveUsers(request, criteriaCardsById));
+    }
+
+    public BulkOfferEligibilityResponse resolveBulkUsers(BulkOfferEligibilityRequest request) {
+        request.offers().forEach(this::validateRequest);
+        Map<UUID, CardProductSummary> criteriaCardsById = request.offers().stream()
+                .anyMatch(offer -> offer.eligibilityMode() == OfferEligibilityMode.CRITERIA)
+                ? lookupCriteriaCards(request.candidates())
+                : Map.of();
+
+        List<OfferEligibilityResult> results = request.offers().stream()
+                .map(offer -> {
+                    OfferEligibilityRequest eligibilityRequest = toEligibilityRequest(offer, request.candidates());
+                    return new OfferEligibilityResult(
+                            offer.offerId(),
+                            resolveUsers(eligibilityRequest, criteriaCardsById)
+                    );
+                })
+                .toList();
+        return new BulkOfferEligibilityResponse(results);
+    }
+
+    private List<UUID> resolveUsers(OfferEligibilityRequest request, Map<UUID, CardProductSummary> criteriaCardsById) {
+        return switch (request.eligibilityMode()) {
             case ALL -> allCandidateUsers(request.candidates());
             case CARD_IDS -> cardIdCandidateUsers(request);
-            case CRITERIA -> criteriaCandidateUsers(request);
+            case CRITERIA -> criteriaCandidateUsers(request, criteriaCardsById);
         };
-        return new OfferEligibilityResponse(eligibleUserIds);
     }
 
     private void validateRequest(OfferEligibilityRequest request) {
@@ -77,6 +107,24 @@ public class OfferEligibilityService {
                 || request.targetPersonal() != null;
     }
 
+    private void validateRequest(OfferEligibilityCheckRequest request) {
+        validateRequest(toEligibilityRequest(request, List.of()));
+    }
+
+    private OfferEligibilityRequest toEligibilityRequest(OfferEligibilityCheckRequest request,
+                                                         List<UserWalletCandidate> candidates) {
+        return new OfferEligibilityRequest(
+                request.eligibilityMode(),
+                request.targetCardProductIds(),
+                request.targetIssuers(),
+                request.targetNetworks(),
+                request.targetTier(),
+                request.targetTypes(),
+                request.targetPersonal(),
+                candidates
+        );
+    }
+
     private List<UUID> allCandidateUsers(List<UserWalletCandidate> candidates) {
         return candidates.stream()
                 .map(UserWalletCandidate::userId)
@@ -101,18 +149,25 @@ public class OfferEligibilityService {
                 .toList();
     }
 
-    private List<UUID> criteriaCandidateUsers(OfferEligibilityRequest request) {
-        List<UUID> candidateCardIds = request.candidates().stream()
+    private Map<UUID, CardProductSummary> lookupCriteriaCards(List<UserWalletCandidate> candidates) {
+        List<UUID> candidateCardIds = candidates.stream()
                 .flatMap(candidate -> candidate.cardProductIds().stream())
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
         if (candidateCardIds.isEmpty()) {
-            return List.of();
+            return Map.of();
         }
 
-        Map<UUID, CardProductSummary> cardsById = cardProductClient.lookupProducts(candidateCardIds).stream()
+        return cardProductClient.lookupProducts(candidateCardIds).stream()
                 .collect(Collectors.toMap(CardProductSummary::id, Function.identity()));
+    }
+
+    private List<UUID> criteriaCandidateUsers(OfferEligibilityRequest request,
+                                              Map<UUID, CardProductSummary> cardsById) {
+        if (cardsById.isEmpty()) {
+            return List.of();
+        }
 
         return request.candidates().stream()
                 .filter(candidate -> hasMatchingCard(candidate, cardsById, request))

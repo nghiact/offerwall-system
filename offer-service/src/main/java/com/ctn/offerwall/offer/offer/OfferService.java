@@ -13,7 +13,8 @@ import com.ctn.offerwall.offer.domain.Offer;
 import com.ctn.offerwall.offer.domain.OfferCategory;
 import com.ctn.offerwall.offer.domain.OfferStatus;
 import com.ctn.offerwall.offer.eligibility.EligibilityClient;
-import com.ctn.offerwall.offer.eligibility.dto.OfferEligibilityRequest;
+import com.ctn.offerwall.offer.eligibility.dto.BulkOfferEligibilityRequest;
+import com.ctn.offerwall.offer.eligibility.dto.OfferEligibilityCheckRequest;
 import com.ctn.offerwall.offer.exception.CategoryNotFoundException;
 import com.ctn.offerwall.offer.exception.OfferNotFoundException;
 import com.ctn.offerwall.offer.exception.UserInputException;
@@ -36,6 +37,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class OfferService {
@@ -83,9 +85,14 @@ public class OfferService {
         List<com.ctn.offerwall.offer.eligibility.dto.UserWalletCandidate> candidates = List.of(
                 new com.ctn.offerwall.offer.eligibility.dto.UserWalletCandidate(userId, walletCandidate.cardProductIds())
         );
+        List<Offer> offers = filteredOffers(categoryId, offerType, eligibilityMode, status, keyword, now);
+        Set<UUID> eligibleOfferIds = eligibilityClient.resolveEligibleOffers(toBulkEligibilityRequest(offers, candidates)).stream()
+                .filter(result -> result.eligibleUserIds().contains(userId))
+                .map(com.ctn.offerwall.offer.eligibility.dto.OfferEligibilityResult::offerId)
+                .collect(Collectors.toSet());
 
-        return filteredOffers(categoryId, offerType, eligibilityMode, status, keyword, now).stream()
-                .filter(offer -> isEligibleForUser(offer, userId, candidates))
+        return offers.stream()
+                .filter(offer -> eligibleOfferIds.contains(offer.getId()))
                 .map(offer -> toResponse(offer, now))
                 .toList();
     }
@@ -245,25 +252,27 @@ public class OfferService {
                 .toList();
     }
 
-    private boolean isEligibleForUser(Offer offer,
-                                      UUID userId,
-                                      List<com.ctn.offerwall.offer.eligibility.dto.UserWalletCandidate> candidates) {
-        return eligibilityClient.resolveEligibleUsers(toEligibilityRequest(offer, candidates)).stream()
-                .anyMatch(userId::equals);
+    private BulkOfferEligibilityRequest toBulkEligibilityRequest(
+            List<Offer> offers,
+            List<com.ctn.offerwall.offer.eligibility.dto.UserWalletCandidate> candidates) {
+        return new BulkOfferEligibilityRequest(
+                offers.stream()
+                        .map(this::toEligibilityCheck)
+                        .toList(),
+                candidates
+        );
     }
 
-    private OfferEligibilityRequest toEligibilityRequest(
-            Offer offer,
-            List<com.ctn.offerwall.offer.eligibility.dto.UserWalletCandidate> candidates) {
-        return new OfferEligibilityRequest(
+    private OfferEligibilityCheckRequest toEligibilityCheck(Offer offer) {
+        return new OfferEligibilityCheckRequest(
+                offer.getId(),
                 offer.getEligibilityMode(),
                 offer.getTargetCardProductIds().stream().toList(),
                 offer.getTargetIssuers().stream().toList(),
                 offer.getTargetNetworks().stream().toList(),
                 offer.getTargetTier(),
                 offer.getTargetTypes().stream().toList(),
-                offer.getTargetPersonal(),
-                candidates
+                offer.getTargetPersonal()
         );
     }
 

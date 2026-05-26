@@ -29,7 +29,7 @@ offerwall:
   clients:
     user:
       base-url: http://localhost:8081
-      internal-api-key:
+      internal-api-key: ${OFFERWALL_INTERNAL_API_KEY:local-dev-internal-key}
     eligibility:
       base-url: http://localhost:8083
-      internal-api-key:
+      internal-api-key: ${OFFERWALL_INTERNAL_API_KEY:local-dev-internal-key}

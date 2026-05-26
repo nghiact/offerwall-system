@@ -1,5 +1,7 @@
 package com.ctn.offerwall.eligibility.eligibility;
 
+import com.ctn.offerwall.eligibility.eligibility.dto.BulkOfferEligibilityRequest;
+import com.ctn.offerwall.eligibility.eligibility.dto.BulkOfferEligibilityResponse;
 import com.ctn.offerwall.eligibility.eligibility.dto.OfferEligibilityRequest;
 import com.ctn.offerwall.eligibility.eligibility.dto.OfferEligibilityResponse;
 import com.ctn.offerwall.eligibility.security.InternalSecurityService;
@@ -29,5 +31,13 @@ public class OfferEligibilityController {
             @Valid @RequestBody OfferEligibilityRequest request) {
         securityService.requireInternalServiceKey(internalServiceKey);
         return eligibilityService.resolveUsers(request);
+    }
+
+    @PostMapping("/offers/bulk-users")
+    public BulkOfferEligibilityResponse resolveBulkUsers(
+            @RequestHeader(name = InternalSecurityService.INTERNAL_SERVICE_KEY_HEADER, required = false) String internalServiceKey,
+            @Valid @RequestBody BulkOfferEligibilityRequest request) {
+        securityService.requireInternalServiceKey(internalServiceKey);
+        return eligibilityService.resolveBulkUsers(request);
     }
 }

@@ -35,7 +35,7 @@ offerwall:
       notification-in-app-enabled: true
   security:
     internal:
-      api-key:
+      api-key: ${OFFERWALL_INTERNAL_API_KEY:local-dev-internal-key}
   tracking:
     enabled: true
     base-url: http://localhost:8084
@@ -43,7 +43,7 @@ offerwall:
   clients:
     card:
       base-url: http://localhost:8085
-      internal-api-key:
+      internal-api-key: ${OFFERWALL_INTERNAL_API_KEY:local-dev-internal-key}
     eligibility:
       base-url: http://localhost:8083
-      internal-api-key:
+      internal-api-key: ${OFFERWALL_INTERNAL_API_KEY:local-dev-internal-key}

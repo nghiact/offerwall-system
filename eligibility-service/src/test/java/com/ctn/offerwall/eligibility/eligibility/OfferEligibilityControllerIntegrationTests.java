@@ -80,6 +80,64 @@ class OfferEligibilityControllerIntegrationTests {
     }
 
     @Test
+    void resolvesBulkOfferEligibilityWithOneCardLookup() throws Exception {
+        UUID userA = UUID.randomUUID();
+        UUID userB = UUID.randomUUID();
+        UUID allOffer = UUID.randomUUID();
+        UUID cardOffer = UUID.randomUUID();
+        UUID criteriaOffer = UUID.randomUUID();
+        UUID matchingCard = UUID.randomUUID();
+        UUID otherCard = UUID.randomUUID();
+
+        when(cardProductClient.lookupProducts(anyList())).thenReturn(List.of(
+                card(matchingCard, "Testbank", CardNetwork.VISA, 4, CardType.CREDIT, true),
+                card(otherCard, "Otherbank", CardNetwork.MASTERCARD, 2, CardType.CREDIT, true)
+        ));
+
+        mockMvc.perform(post("/internal/eligibility/offers/bulk-users")
+                        .header(INTERNAL_KEY_HEADER, INTERNAL_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "offers": [
+                                    {
+                                      "offerId": "%s",
+                                      "eligibilityMode": "ALL"
+                                    },
+                                    {
+                                      "offerId": "%s",
+                                      "eligibilityMode": "CARD_IDS",
+                                      "targetCardProductIds": ["%s"]
+                                    },
+                                    {
+                                      "offerId": "%s",
+                                      "eligibilityMode": "CRITERIA",
+                                      "targetNetworks": ["VISA"],
+                                      "targetTier": 3
+                                    }
+                                  ],
+                                  "candidates": [
+                                    {"userId": "%s", "cardProductIds": ["%s"]},
+                                    {"userId": "%s", "cardProductIds": ["%s"]}
+                                  ]
+                                }
+                                """.formatted(
+                                allOffer,
+                                cardOffer, otherCard,
+                                criteriaOffer,
+                                userA, matchingCard,
+                                userB, otherCard
+                        )))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.offers[0].offerId").value(allOffer.toString()))
+                .andExpect(jsonPath("$.offers[0].eligibleUserIds", containsInAnyOrder(userA.toString(), userB.toString())))
+                .andExpect(jsonPath("$.offers[1].offerId").value(cardOffer.toString()))
+                .andExpect(jsonPath("$.offers[1].eligibleUserIds[0]").value(userB.toString()))
+                .andExpect(jsonPath("$.offers[2].offerId").value(criteriaOffer.toString()))
+                .andExpect(jsonPath("$.offers[2].eligibleUserIds[0]").value(userA.toString()));
+    }
+
+    @Test
     void resolvesAllAndCardIdModesWithoutCardLookup() throws Exception {
         UUID userA = UUID.randomUUID();
         UUID userB = UUID.randomUUID();
