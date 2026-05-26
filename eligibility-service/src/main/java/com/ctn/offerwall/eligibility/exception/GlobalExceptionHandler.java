@@ -1,4 +1,4 @@
-package com.ctn.offerwall.user.exception;
+package com.ctn.offerwall.eligibility.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,29 +13,14 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(DuplicateEmailException.class)
-    ResponseEntity<ApiError> duplicateEmail(DuplicateEmailException exception) {
-        return error(HttpStatus.CONFLICT, exception.getMessage());
-    }
-
-    @ExceptionHandler(UserInputException.class)
-    ResponseEntity<ApiError> userInput(UserInputException exception) {
-        return error(HttpStatus.BAD_REQUEST, exception.getMessage());
-    }
-
-    @ExceptionHandler(InvalidCredentialsException.class)
-    ResponseEntity<ApiError> invalidCredentials(InvalidCredentialsException exception) {
-        return error(HttpStatus.UNAUTHORIZED, exception.getMessage());
-    }
-
     @ExceptionHandler(AuthenticationRequiredException.class)
     ResponseEntity<ApiError> authenticationRequired(AuthenticationRequiredException exception) {
         return error(HttpStatus.UNAUTHORIZED, exception.getMessage());
     }
 
-    @ExceptionHandler(WalletCardNotFoundException.class)
-    ResponseEntity<ApiError> walletCardNotFound(WalletCardNotFoundException exception) {
-        return error(HttpStatus.NOT_FOUND, exception.getMessage());
+    @ExceptionHandler(UserInputException.class)
+    ResponseEntity<ApiError> userInput(UserInputException exception) {
+        return error(HttpStatus.BAD_REQUEST, exception.getMessage());
     }
 
     @ExceptionHandler(UpstreamServiceException.class)

@@ -5,6 +5,8 @@ import com.ctn.offerwall.common.event.EntityType;
 import com.ctn.offerwall.common.event.EventMetadata;
 import com.ctn.offerwall.common.event.EventOutcome;
 import com.ctn.offerwall.common.event.EventType;
+import com.ctn.offerwall.common.card.CardNetwork;
+import com.ctn.offerwall.common.card.CardType;
 import com.ctn.offerwall.common.offer.OfferEligibilityMode;
 import com.ctn.offerwall.common.offer.OfferType;
 import com.ctn.offerwall.offer.domain.Offer;
@@ -27,6 +29,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -76,6 +79,9 @@ public class OfferService {
         OfferCategory category = findCategory(request.categoryId());
         validateRequest(request);
         Set<UUID> targetCardProductIds = normalizeTargetCardProductIds(request.targetCardProductIds());
+        Set<String> targetIssuers = normalizeTargetIssuers(request);
+        Set<CardNetwork> targetNetworks = normalizeTargetNetworks(request);
+        Set<CardType> targetTypes = normalizeTargetTypes(request);
 
         Offer offer = new Offer(
                 category,
@@ -88,10 +94,10 @@ public class OfferService {
                 request.offerType(),
                 request.eligibilityMode(),
                 targetCardProductIds,
-                trimToNull(request.targetIssuer()),
-                request.targetNetwork(),
+                targetIssuers,
+                targetNetworks,
                 request.targetTier(),
-                request.targetType(),
+                targetTypes,
                 request.targetPersonal()
         );
         Offer savedOffer = offerRepository.save(offer);
@@ -105,6 +111,9 @@ public class OfferService {
         OfferCategory category = findCategory(request.categoryId());
         validateRequest(request);
         Set<UUID> targetCardProductIds = normalizeTargetCardProductIds(request.targetCardProductIds());
+        Set<String> targetIssuers = normalizeTargetIssuers(request);
+        Set<CardNetwork> targetNetworks = normalizeTargetNetworks(request);
+        Set<CardType> targetTypes = normalizeTargetTypes(request);
 
         offer.update(
                 category,
@@ -117,10 +126,10 @@ public class OfferService {
                 request.offerType(),
                 request.eligibilityMode(),
                 targetCardProductIds,
-                trimToNull(request.targetIssuer()),
-                request.targetNetwork(),
+                targetIssuers,
+                targetNetworks,
                 request.targetTier(),
-                request.targetType(),
+                targetTypes,
                 request.targetPersonal()
         );
         return toResponse(offer, Instant.now(clock));
@@ -190,18 +199,15 @@ public class OfferService {
                 if (!targetCardProductIds.isEmpty()) {
                     throw new UserInputException("CRITERIA eligibility cannot define card product IDs.");
                 }
-                if (!hasCriteria) {
-                    throw new UserInputException("CRITERIA eligibility requires at least one target criterion.");
-                }
             }
         }
     }
 
     private boolean hasCriteria(OfferRequest request) {
-        return trimToNull(request.targetIssuer()) != null
-                || request.targetNetwork() != null
+        return !normalizeTargetIssuers(request).isEmpty()
+                || !normalizeTargetNetworks(request).isEmpty()
                 || request.targetTier() != null
-                || request.targetType() != null
+                || !normalizeTargetTypes(request).isEmpty()
                 || request.targetPersonal() != null;
     }
 
@@ -210,6 +216,48 @@ public class OfferService {
             return Set.of();
         }
         return new LinkedHashSet<>(targetCardProductIds);
+    }
+
+    private Set<String> normalizeTargetIssuers(OfferRequest request) {
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        addIssuer(values, request.targetIssuer());
+        if (request.targetIssuers() != null) {
+            request.targetIssuers().forEach(value -> addIssuer(values, value));
+        }
+        return values;
+    }
+
+    private Set<CardNetwork> normalizeTargetNetworks(OfferRequest request) {
+        LinkedHashSet<CardNetwork> values = new LinkedHashSet<>();
+        if (request.targetNetwork() != null) {
+            values.add(request.targetNetwork());
+        }
+        if (request.targetNetworks() != null) {
+            request.targetNetworks().stream()
+                    .filter(Objects::nonNull)
+                    .forEach(values::add);
+        }
+        return values;
+    }
+
+    private Set<CardType> normalizeTargetTypes(OfferRequest request) {
+        LinkedHashSet<CardType> values = new LinkedHashSet<>();
+        if (request.targetType() != null) {
+            values.add(request.targetType());
+        }
+        if (request.targetTypes() != null) {
+            request.targetTypes().stream()
+                    .filter(Objects::nonNull)
+                    .forEach(values::add);
+        }
+        return values;
+    }
+
+    private void addIssuer(Set<String> values, String issuer) {
+        String normalized = trimToNull(issuer);
+        if (normalized != null) {
+            values.add(normalized);
+        }
     }
 
     private String trimToNull(String value) {

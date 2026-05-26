@@ -18,6 +18,8 @@ spring:
 
 offerwall:
   security:
+    internal:
+      api-key:
     jwt:
       issuer: offerwall-user-service
       audience: offerwall-api

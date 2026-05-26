@@ -20,12 +20,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "offerwall.security.internal.api-key=stage-10-internal")
 @AutoConfigureMockMvc
 @Transactional
 class CardControllerIntegrationTests {
 
     private static final String AUTHORIZATION = "Bearer local-test-token";
+    private static final String INTERNAL_KEY_HEADER = "X-Internal-Service-Key";
+    private static final String INTERNAL_KEY = "stage-10-internal";
 
     @Autowired
     private MockMvc mockMvc;
@@ -117,6 +119,40 @@ class CardControllerIntegrationTests {
                         .content(cardJson("duplicate-bin-product-" + bin, new String[]{bin, bin}, "Testbank", null, "VISA", 1, null, "CREDIT")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Card product cannot contain duplicate BINs."));
+    }
+
+    @Test
+    void looksUpInternalCardProductSummaries() throws Exception {
+        String base = randomBinBase();
+        JsonNode created = createCard("lookup-card-" + base, new String[]{base + "77"}, "Lookupbank", "Reserve",
+                "VISA", 3, null, "CREDIT");
+
+        mockMvc.perform(post("/internal/card-products/lookup")
+                        .header(INTERNAL_KEY_HEADER, INTERNAL_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "cardProductIds": ["%s"]
+                                }
+                                """.formatted(created.get("id").asText())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].id").value(created.get("id").asText()))
+                .andExpect(jsonPath("$[0].issuer").value("Lookupbank"))
+                .andExpect(jsonPath("$[0].network").value("VISA"))
+                .andExpect(jsonPath("$[0].tier").value(3))
+                .andExpect(jsonPath("$[0].type").value("CREDIT"))
+                .andExpect(jsonPath("$[0].displayName").value("Lookupbank Reserve Visa Signature credit card"));
+
+        mockMvc.perform(post("/internal/card-products/lookup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "cardProductIds": ["%s"]
+                                }
+                                """.formatted(created.get("id").asText())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Internal service key is required."));
     }
 
     private JsonNode createCard(String productCode,

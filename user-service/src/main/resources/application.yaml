@@ -40,3 +40,7 @@ offerwall:
     enabled: true
     base-url: http://localhost:8084
     fail-on-error: false
+  clients:
+    eligibility:
+      base-url: http://localhost:8083
+      internal-api-key:

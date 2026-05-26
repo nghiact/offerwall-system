@@ -118,7 +118,9 @@ class OfferControllerIntegrationTests {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.eligibilityMode").value("CRITERIA"))
                 .andExpect(jsonPath("$.targetIssuer").value("Testbank"))
-                .andExpect(jsonPath("$.targetNetwork").value("VISA"));
+                .andExpect(jsonPath("$.targetIssuers[0]").value("Testbank"))
+                .andExpect(jsonPath("$.targetNetwork").value("VISA"))
+                .andExpect(jsonPath("$.targetNetworks[0]").value("VISA"));
     }
 
     @Test
@@ -143,9 +145,11 @@ class OfferControllerIntegrationTests {
         mockMvc.perform(post("/api/offers")
                         .header(HttpHeaders.AUTHORIZATION, ADMIN_AUTHORIZATION)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(offerJson(category.get("id").asText(), "No Criteria " + suffix, "ONLINE", "CRITERIA", "[]", null, null)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("CRITERIA eligibility requires at least one target criterion."));
+                        .content(offerJson(category.get("id").asText(), "Criteria All " + suffix, "ONLINE", "CRITERIA", "[]", null, null)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.targetIssuers", hasSize(0)))
+                .andExpect(jsonPath("$.targetNetworks", hasSize(0)))
+                .andExpect(jsonPath("$.targetTypes", hasSize(0)));
     }
 
     @Test
@@ -242,10 +246,13 @@ class OfferControllerIntegrationTests {
                   "offerType": "%s",
                   "eligibilityMode": "%s",
                   "targetCardProductIds": %s,
-                  "targetIssuer": %s,
-                  "targetNetwork": %s,
+                  "targetIssuer": null,
+                  "targetIssuers": %s,
+                  "targetNetwork": null,
+                  "targetNetworks": %s,
                   "targetTier": null,
                   "targetType": null,
+                  "targetTypes": [],
                   "targetPersonal": null
                 }
                 """.formatted(
@@ -256,8 +263,8 @@ class OfferControllerIntegrationTests {
                 offerType,
                 eligibilityMode,
                 targetCardProductIds == null ? "[]" : targetCardProductIds,
-                targetIssuer == null ? "null" : targetIssuer,
-                targetNetwork == null ? "null" : targetNetwork
+                targetIssuer == null ? "[]" : "[" + targetIssuer + "]",
+                targetNetwork == null ? "[]" : "[" + targetNetwork + "]"
         );
     }
 

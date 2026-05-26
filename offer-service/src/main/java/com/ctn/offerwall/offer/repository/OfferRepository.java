@@ -11,11 +11,11 @@ import java.util.UUID;
 
 public interface OfferRepository extends JpaRepository<Offer, UUID> {
 
-    @EntityGraph(attributePaths = {"category", "targetCardProductIds"})
+    @EntityGraph(attributePaths = {"category", "targetCardProductIds", "targetIssuers", "targetNetworks", "targetTypes"})
     @Query("select distinct o from Offer o")
     List<Offer> findAllWithDetails();
 
-    @EntityGraph(attributePaths = {"category", "targetCardProductIds"})
+    @EntityGraph(attributePaths = {"category", "targetCardProductIds", "targetIssuers", "targetNetworks", "targetTypes"})
     Optional<Offer> findById(UUID id);
 
     boolean existsByCategoryId(UUID categoryId);

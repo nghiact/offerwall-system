@@ -50,13 +50,19 @@ public record OfferRequest(
         @Size(max = 160)
         String targetIssuer,
 
+        List<@Size(max = 160) String> targetIssuers,
+
         CardNetwork targetNetwork,
+
+        List<CardNetwork> targetNetworks,
 
         @Min(0)
         @Max(5)
         Integer targetTier,
 
         CardType targetType,
+
+        List<CardType> targetTypes,
 
         Boolean targetPersonal
 ) {

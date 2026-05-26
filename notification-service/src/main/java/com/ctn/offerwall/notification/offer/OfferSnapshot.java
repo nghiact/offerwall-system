@@ -21,9 +21,12 @@ public record OfferSnapshot(
         OfferEligibilityMode eligibilityMode,
         List<UUID> targetCardProductIds,
         String targetIssuer,
+        List<String> targetIssuers,
         CardNetwork targetNetwork,
+        List<CardNetwork> targetNetworks,
         Integer targetTier,
         CardType targetType,
+        List<CardType> targetTypes,
         Boolean targetPersonal
 ) {
 }

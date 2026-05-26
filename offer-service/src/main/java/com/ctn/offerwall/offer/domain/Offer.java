@@ -78,19 +78,37 @@ public class Offer {
     @Column(name = "card_product_id", nullable = false)
     private Set<UUID> targetCardProductIds = new LinkedHashSet<>();
 
-    @Column(name = "target_issuer", length = 160)
-    private String targetIssuer;
+    @ElementCollection
+    @CollectionTable(
+            name = "offer_target_issuers",
+            joinColumns = @JoinColumn(name = "offer_id"),
+            indexes = @Index(name = "idx_offer_target_issuers_issuer", columnList = "issuer")
+    )
+    @Column(name = "issuer", nullable = false, length = 160)
+    private Set<String> targetIssuers = new LinkedHashSet<>();
 
+    @ElementCollection
+    @CollectionTable(
+            name = "offer_target_networks",
+            joinColumns = @JoinColumn(name = "offer_id"),
+            indexes = @Index(name = "idx_offer_target_networks_network", columnList = "network")
+    )
     @Enumerated(EnumType.STRING)
-    @Column(name = "target_network", length = 20)
-    private CardNetwork targetNetwork;
+    @Column(name = "network", nullable = false, length = 20)
+    private Set<CardNetwork> targetNetworks = new LinkedHashSet<>();
 
     @Column(name = "target_tier")
     private Integer targetTier;
 
+    @ElementCollection
+    @CollectionTable(
+            name = "offer_target_types",
+            joinColumns = @JoinColumn(name = "offer_id"),
+            indexes = @Index(name = "idx_offer_target_types_type", columnList = "card_type")
+    )
     @Enumerated(EnumType.STRING)
-    @Column(name = "target_type", length = 20)
-    private CardType targetType;
+    @Column(name = "card_type", nullable = false, length = 20)
+    private Set<CardType> targetTypes = new LinkedHashSet<>();
 
     @Column(name = "target_personal")
     private Boolean targetPersonal;
@@ -114,14 +132,14 @@ public class Offer {
                  OfferType offerType,
                  OfferEligibilityMode eligibilityMode,
                  Set<UUID> targetCardProductIds,
-                 String targetIssuer,
-                 CardNetwork targetNetwork,
+                 Set<String> targetIssuers,
+                 Set<CardNetwork> targetNetworks,
                  Integer targetTier,
-                 CardType targetType,
+                 Set<CardType> targetTypes,
                  Boolean targetPersonal) {
         this.id = UUID.randomUUID();
         update(category, merchantName, offerSummary, addressDisplay, addressUrl, startTime, endTime, offerType,
-                eligibilityMode, targetCardProductIds, targetIssuer, targetNetwork, targetTier, targetType, targetPersonal);
+                eligibilityMode, targetCardProductIds, targetIssuers, targetNetworks, targetTier, targetTypes, targetPersonal);
     }
 
     public void update(OfferCategory category,
@@ -134,10 +152,10 @@ public class Offer {
                        OfferType offerType,
                        OfferEligibilityMode eligibilityMode,
                        Set<UUID> targetCardProductIds,
-                       String targetIssuer,
-                       CardNetwork targetNetwork,
+                       Set<String> targetIssuers,
+                       Set<CardNetwork> targetNetworks,
                        Integer targetTier,
-                       CardType targetType,
+                       Set<CardType> targetTypes,
                        Boolean targetPersonal) {
         this.category = category;
         this.merchantName = merchantName;
@@ -150,10 +168,13 @@ public class Offer {
         this.eligibilityMode = eligibilityMode;
         this.targetCardProductIds.clear();
         this.targetCardProductIds.addAll(targetCardProductIds);
-        this.targetIssuer = targetIssuer;
-        this.targetNetwork = targetNetwork;
+        this.targetIssuers.clear();
+        this.targetIssuers.addAll(targetIssuers);
+        this.targetNetworks.clear();
+        this.targetNetworks.addAll(targetNetworks);
         this.targetTier = targetTier;
-        this.targetType = targetType;
+        this.targetTypes.clear();
+        this.targetTypes.addAll(targetTypes);
         this.targetPersonal = targetPersonal;
     }
 
@@ -223,20 +244,20 @@ public class Offer {
         return targetCardProductIds;
     }
 
-    public String getTargetIssuer() {
-        return targetIssuer;
+    public Set<String> getTargetIssuers() {
+        return targetIssuers;
     }
 
-    public CardNetwork getTargetNetwork() {
-        return targetNetwork;
+    public Set<CardNetwork> getTargetNetworks() {
+        return targetNetworks;
     }
 
     public Integer getTargetTier() {
         return targetTier;
     }
 
-    public CardType getTargetType() {
-        return targetType;
+    public Set<CardType> getTargetTypes() {
+        return targetTypes;
     }
 
     public Boolean getTargetPersonal() {

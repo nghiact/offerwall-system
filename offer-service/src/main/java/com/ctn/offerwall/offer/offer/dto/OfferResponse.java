@@ -27,9 +27,12 @@ public record OfferResponse(
         OfferEligibilityMode eligibilityMode,
         List<UUID> targetCardProductIds,
         String targetIssuer,
+        List<String> targetIssuers,
         CardNetwork targetNetwork,
+        List<CardNetwork> targetNetworks,
         Integer targetTier,
         CardType targetType,
+        List<CardType> targetTypes,
         Boolean targetPersonal,
         Instant createdAt,
         Instant updatedAt
@@ -51,13 +54,30 @@ public record OfferResponse(
                 offer.getTargetCardProductIds().stream()
                         .sorted(Comparator.comparing(UUID::toString))
                         .toList(),
-                offer.getTargetIssuer(),
-                offer.getTargetNetwork(),
+                firstOrNull(offer.getTargetIssuers().stream().sorted(String.CASE_INSENSITIVE_ORDER).toList()),
+                offer.getTargetIssuers().stream()
+                        .sorted(String.CASE_INSENSITIVE_ORDER)
+                        .toList(),
+                firstOrNull(offer.getTargetNetworks().stream()
+                        .sorted(Comparator.comparing(CardNetwork::name))
+                        .toList()),
+                offer.getTargetNetworks().stream()
+                        .sorted(Comparator.comparing(CardNetwork::name))
+                        .toList(),
                 offer.getTargetTier(),
-                offer.getTargetType(),
+                firstOrNull(offer.getTargetTypes().stream()
+                        .sorted(Comparator.comparing(CardType::name))
+                        .toList()),
+                offer.getTargetTypes().stream()
+                        .sorted(Comparator.comparing(CardType::name))
+                        .toList(),
                 offer.getTargetPersonal(),
                 offer.getCreatedAt(),
                 offer.getUpdatedAt()
         );
+    }
+
+    private static <T> T firstOrNull(List<T> values) {
+        return values.isEmpty() ? null : values.getFirst();
     }
 }

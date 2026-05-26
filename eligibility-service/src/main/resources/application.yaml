@@ -17,6 +17,15 @@ services:
   offer-service:
     url: http://localhost:8082
 
+offerwall:
+  security:
+    internal:
+      api-key:
+  clients:
+    card:
+      base-url: http://localhost:8085
+      internal-api-key:
+
 app:
   rabbitmq:
     exchange: offerwall.exchange

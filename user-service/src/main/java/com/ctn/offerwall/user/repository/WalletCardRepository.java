@@ -18,6 +18,13 @@ public interface WalletCardRepository extends JpaRepository<WalletCard, UUID> {
     Optional<WalletCard> findByIdAndUserId(UUID id, UUID userId);
 
     @Query("""
+            select walletCard
+            from WalletCard walletCard
+            join fetch walletCard.user
+            """)
+    List<WalletCard> findAllWithUsers();
+
+    @Query("""
             select distinct walletCard.user
             from WalletCard walletCard
             where walletCard.cardId in :cardIds

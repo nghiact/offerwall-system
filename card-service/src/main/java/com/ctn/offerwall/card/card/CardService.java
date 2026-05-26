@@ -2,6 +2,7 @@ package com.ctn.offerwall.card.card;
 
 import com.ctn.offerwall.card.card.dto.CardProductRequest;
 import com.ctn.offerwall.card.card.dto.CardProductResponse;
+import com.ctn.offerwall.card.card.dto.CardProductSummaryResponse;
 import com.ctn.offerwall.card.domain.CardBin;
 import com.ctn.offerwall.card.domain.CardProduct;
 import com.ctn.offerwall.card.exception.CardNotFoundException;
@@ -19,7 +20,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class CardService {
@@ -46,6 +50,30 @@ public class CardService {
     @Transactional(readOnly = true)
     public CardProductResponse getCard(UUID id) {
         return toResponse(findProduct(id), List.of());
+    }
+
+    @Transactional(readOnly = true)
+    public List<CardProductSummaryResponse> lookupCardSummaries(List<UUID> cardProductIds) {
+        if (cardProductIds == null || cardProductIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> requestedIds = cardProductIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<UUID, CardProduct> productsById = productRepository.findAllById(requestedIds).stream()
+                .collect(Collectors.toMap(CardProduct::getId, Function.identity()));
+
+        return requestedIds.stream()
+                .map(productsById::get)
+                .filter(Objects::nonNull)
+                .map(product -> CardProductSummaryResponse.from(
+                        product,
+                        displayFormatter.tierLabel(product),
+                        displayFormatter.displayName(product)
+                ))
+                .toList();
     }
 
     @Transactional(readOnly = true)

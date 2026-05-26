@@ -198,9 +198,12 @@ class OfferCreatedNotificationControllerIntegrationTests {
                 targetCardProductIds.isEmpty() ? OfferEligibilityMode.ALL : OfferEligibilityMode.CARD_IDS,
                 targetCardProductIds,
                 null,
+                List.of(),
+                null,
+                List.of(),
                 null,
                 null,
-                null,
+                List.of(),
                 null
         );
     }
