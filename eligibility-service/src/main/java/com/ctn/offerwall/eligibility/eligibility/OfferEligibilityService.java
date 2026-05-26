@@ -7,6 +7,7 @@ import com.ctn.offerwall.eligibility.card.CardProductSummary;
 import com.ctn.offerwall.eligibility.eligibility.dto.OfferEligibilityRequest;
 import com.ctn.offerwall.eligibility.eligibility.dto.OfferEligibilityResponse;
 import com.ctn.offerwall.eligibility.eligibility.dto.UserWalletCandidate;
+import com.ctn.offerwall.eligibility.exception.UserInputException;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashSet;
@@ -29,12 +30,51 @@ public class OfferEligibilityService {
     }
 
     public OfferEligibilityResponse resolveUsers(OfferEligibilityRequest request) {
+        validateRequest(request);
         List<UUID> eligibleUserIds = switch (request.eligibilityMode()) {
             case ALL -> allCandidateUsers(request.candidates());
             case CARD_IDS -> cardIdCandidateUsers(request);
             case CRITERIA -> criteriaCandidateUsers(request);
         };
         return new OfferEligibilityResponse(eligibleUserIds);
+    }
+
+    private void validateRequest(OfferEligibilityRequest request) {
+        switch (request.eligibilityMode()) {
+            case ALL -> {
+                if (hasTargetCardIds(request) || hasCriteria(request)) {
+                    throw new UserInputException("ALL eligibility cannot define card IDs or criteria.");
+                }
+            }
+            case CARD_IDS -> {
+                if (!hasTargetCardIds(request)) {
+                    throw new UserInputException("CARD_IDS eligibility requires at least one card product ID.");
+                }
+                if (hasCriteria(request)) {
+                    throw new UserInputException("CARD_IDS eligibility cannot define criteria.");
+                }
+            }
+            case CRITERIA -> {
+                if (hasTargetCardIds(request)) {
+                    throw new UserInputException("CRITERIA eligibility cannot define card product IDs.");
+                }
+                if (!hasCriteria(request)) {
+                    throw new UserInputException("CRITERIA eligibility requires at least one criterion.");
+                }
+            }
+        }
+    }
+
+    private boolean hasTargetCardIds(OfferEligibilityRequest request) {
+        return request.targetCardProductIds().stream().anyMatch(Objects::nonNull);
+    }
+
+    private boolean hasCriteria(OfferEligibilityRequest request) {
+        return request.targetIssuers().stream().anyMatch(value -> normalize(value) != null)
+                || request.targetNetworks().stream().anyMatch(Objects::nonNull)
+                || request.targetTier() != null
+                || request.targetTypes().stream().anyMatch(Objects::nonNull)
+                || request.targetPersonal() != null;
     }
 
     private List<UUID> allCandidateUsers(List<UserWalletCandidate> candidates) {

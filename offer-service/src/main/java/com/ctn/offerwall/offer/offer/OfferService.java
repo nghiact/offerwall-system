@@ -12,6 +12,8 @@ import com.ctn.offerwall.common.offer.OfferType;
 import com.ctn.offerwall.offer.domain.Offer;
 import com.ctn.offerwall.offer.domain.OfferCategory;
 import com.ctn.offerwall.offer.domain.OfferStatus;
+import com.ctn.offerwall.offer.eligibility.EligibilityClient;
+import com.ctn.offerwall.offer.eligibility.dto.OfferEligibilityRequest;
 import com.ctn.offerwall.offer.exception.CategoryNotFoundException;
 import com.ctn.offerwall.offer.exception.OfferNotFoundException;
 import com.ctn.offerwall.offer.exception.UserInputException;
@@ -20,6 +22,8 @@ import com.ctn.offerwall.offer.offer.dto.OfferResponse;
 import com.ctn.offerwall.offer.repository.OfferCategoryRepository;
 import com.ctn.offerwall.offer.repository.OfferRepository;
 import com.ctn.offerwall.offer.tracking.BusinessEventPublisher;
+import com.ctn.offerwall.offer.user.UserWalletClient;
+import com.ctn.offerwall.offer.user.dto.UserWalletCandidate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,14 +43,20 @@ public class OfferService {
     private final OfferRepository offerRepository;
     private final OfferCategoryRepository categoryRepository;
     private final BusinessEventPublisher eventPublisher;
+    private final UserWalletClient userWalletClient;
+    private final EligibilityClient eligibilityClient;
     private final Clock clock = Clock.systemUTC();
 
     public OfferService(OfferRepository offerRepository,
                         OfferCategoryRepository categoryRepository,
-                        BusinessEventPublisher eventPublisher) {
+                        BusinessEventPublisher eventPublisher,
+                        UserWalletClient userWalletClient,
+                        EligibilityClient eligibilityClient) {
         this.offerRepository = offerRepository;
         this.categoryRepository = categoryRepository;
         this.eventPublisher = eventPublisher;
+        this.userWalletClient = userWalletClient;
+        this.eligibilityClient = eligibilityClient;
     }
 
     @Transactional(readOnly = true)
@@ -56,15 +66,26 @@ public class OfferService {
                                           OfferStatus status,
                                           String keyword) {
         Instant now = Instant.now(clock);
-        String normalizedKeyword = trimToNull(keyword);
-        String lowerKeyword = normalizedKeyword == null ? null : normalizedKeyword.toLowerCase(Locale.ROOT);
+        return filteredOffers(categoryId, offerType, eligibilityMode, status, keyword, now).stream()
+                .map(offer -> toResponse(offer, now))
+                .toList();
+    }
 
-        return offerRepository.findAllWithDetails().stream()
-                .filter(offer -> categoryId == null || offer.getCategory().getId().equals(categoryId))
-                .filter(offer -> offerType == null || offer.getOfferType() == offerType)
-                .filter(offer -> eligibilityMode == null || offer.getEligibilityMode() == eligibilityMode)
-                .filter(offer -> status == null || offer.statusAt(now) == status)
-                .filter(offer -> lowerKeyword == null || offer.getMerchantName().toLowerCase(Locale.ROOT).contains(lowerKeyword))
+    @Transactional(readOnly = true)
+    public List<OfferResponse> listOffersAvailableForUser(UUID userId,
+                                                          UUID categoryId,
+                                                          OfferType offerType,
+                                                          OfferEligibilityMode eligibilityMode,
+                                                          OfferStatus status,
+                                                          String keyword) {
+        Instant now = Instant.now(clock);
+        UserWalletCandidate walletCandidate = userWalletClient.getWalletCandidate(userId);
+        List<com.ctn.offerwall.offer.eligibility.dto.UserWalletCandidate> candidates = List.of(
+                new com.ctn.offerwall.offer.eligibility.dto.UserWalletCandidate(userId, walletCandidate.cardProductIds())
+        );
+
+        return filteredOffers(categoryId, offerType, eligibilityMode, status, keyword, now).stream()
+                .filter(offer -> isEligibleForUser(offer, userId, candidates))
                 .map(offer -> toResponse(offer, now))
                 .toList();
     }
@@ -199,8 +220,51 @@ public class OfferService {
                 if (!targetCardProductIds.isEmpty()) {
                     throw new UserInputException("CRITERIA eligibility cannot define card product IDs.");
                 }
+                if (!hasCriteria) {
+                    throw new UserInputException("CRITERIA eligibility requires at least one criterion.");
+                }
             }
         }
+    }
+
+    private List<Offer> filteredOffers(UUID categoryId,
+                                       OfferType offerType,
+                                       OfferEligibilityMode eligibilityMode,
+                                       OfferStatus status,
+                                       String keyword,
+                                       Instant now) {
+        String normalizedKeyword = trimToNull(keyword);
+        String lowerKeyword = normalizedKeyword == null ? null : normalizedKeyword.toLowerCase(Locale.ROOT);
+
+        return offerRepository.findAllWithDetails().stream()
+                .filter(offer -> categoryId == null || offer.getCategory().getId().equals(categoryId))
+                .filter(offer -> offerType == null || offer.getOfferType() == offerType)
+                .filter(offer -> eligibilityMode == null || offer.getEligibilityMode() == eligibilityMode)
+                .filter(offer -> status == null || offer.statusAt(now) == status)
+                .filter(offer -> lowerKeyword == null || offer.getMerchantName().toLowerCase(Locale.ROOT).contains(lowerKeyword))
+                .toList();
+    }
+
+    private boolean isEligibleForUser(Offer offer,
+                                      UUID userId,
+                                      List<com.ctn.offerwall.offer.eligibility.dto.UserWalletCandidate> candidates) {
+        return eligibilityClient.resolveEligibleUsers(toEligibilityRequest(offer, candidates)).stream()
+                .anyMatch(userId::equals);
+    }
+
+    private OfferEligibilityRequest toEligibilityRequest(
+            Offer offer,
+            List<com.ctn.offerwall.offer.eligibility.dto.UserWalletCandidate> candidates) {
+        return new OfferEligibilityRequest(
+                offer.getEligibilityMode(),
+                offer.getTargetCardProductIds().stream().toList(),
+                offer.getTargetIssuers().stream().toList(),
+                offer.getTargetNetworks().stream().toList(),
+                offer.getTargetTier(),
+                offer.getTargetTypes().stream().toList(),
+                offer.getTargetPersonal(),
+                candidates
+        );
     }
 
     private boolean hasCriteria(OfferRequest request) {

@@ -41,6 +41,9 @@ offerwall:
     base-url: http://localhost:8084
     fail-on-error: false
   clients:
+    card:
+      base-url: http://localhost:8085
+      internal-api-key:
     eligibility:
       base-url: http://localhost:8083
       internal-api-key:

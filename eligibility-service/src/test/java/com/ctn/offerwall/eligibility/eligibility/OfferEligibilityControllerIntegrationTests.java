@@ -122,6 +122,27 @@ class OfferEligibilityControllerIntegrationTests {
     }
 
     @Test
+    void rejectsCriteriaWithoutCriteria() throws Exception {
+        mockMvc.perform(post("/internal/eligibility/offers/users")
+                        .header(INTERNAL_KEY_HEADER, INTERNAL_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "eligibilityMode": "CRITERIA",
+                                  "targetCardProductIds": [],
+                                  "targetIssuers": [],
+                                  "targetNetworks": [],
+                                  "targetTier": null,
+                                  "targetTypes": [],
+                                  "targetPersonal": null,
+                                  "candidates": []
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("CRITERIA eligibility requires at least one criterion."));
+    }
+
+    @Test
     void rejectsMissingInternalKey() throws Exception {
         mockMvc.perform(post("/internal/eligibility/offers/users")
                         .contentType(MediaType.APPLICATION_JSON)

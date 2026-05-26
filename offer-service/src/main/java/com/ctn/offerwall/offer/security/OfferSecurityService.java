@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class OfferSecurityService {
@@ -43,6 +44,18 @@ public class OfferSecurityService {
             throw new AuthorizationDeniedException("Admin or editor role is required.");
         }
         return claims.getSubject();
+    }
+
+    public String requireUserId(String authorizationHeader) {
+        return parseClaims(extractBearerToken(authorizationHeader)).getSubject();
+    }
+
+    public UUID requireUserUuid(String authorizationHeader) {
+        try {
+            return UUID.fromString(requireUserId(authorizationHeader));
+        } catch (IllegalArgumentException exception) {
+            throw invalidToken();
+        }
     }
 
     private String extractBearerToken(String authorizationHeader) {

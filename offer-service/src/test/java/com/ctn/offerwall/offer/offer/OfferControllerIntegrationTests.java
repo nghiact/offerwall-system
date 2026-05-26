@@ -4,7 +4,11 @@ import com.ctn.offerwall.common.event.BusinessEvent;
 import com.ctn.offerwall.common.event.EntityType;
 import com.ctn.offerwall.common.event.EventOutcome;
 import com.ctn.offerwall.common.event.EventType;
+import com.ctn.offerwall.offer.eligibility.EligibilityClient;
+import com.ctn.offerwall.offer.eligibility.dto.OfferEligibilityRequest;
 import com.ctn.offerwall.offer.tracking.BusinessEventPublisher;
+import com.ctn.offerwall.offer.user.UserWalletClient;
+import com.ctn.offerwall.offer.user.dto.UserWalletCandidate;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -19,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,6 +31,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -53,6 +59,12 @@ class OfferControllerIntegrationTests {
 
     @MockitoBean
     private BusinessEventPublisher eventPublisher;
+
+    @MockitoBean
+    private UserWalletClient userWalletClient;
+
+    @MockitoBean
+    private EligibilityClient eligibilityClient;
 
     @Test
     void createsOfferAndFiltersList() throws Exception {
@@ -124,6 +136,46 @@ class OfferControllerIntegrationTests {
     }
 
     @Test
+    void filtersAvailableOffersForCurrentUser() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        JsonNode category = createCategory("available-" + suffix, "Available " + suffix);
+        UUID userId = UUID.fromString(USER_ID);
+        UUID matchingCardProductId = UUID.randomUUID();
+        UUID otherCardProductId = UUID.randomUUID();
+
+        when(userWalletClient.getWalletCandidate(userId))
+                .thenReturn(new UserWalletCandidate(userId, List.of(matchingCardProductId)));
+        when(eligibilityClient.resolveEligibleUsers(any(OfferEligibilityRequest.class))).thenAnswer(invocation -> {
+            OfferEligibilityRequest request = invocation.getArgument(0);
+            return request.targetCardProductIds().contains(matchingCardProductId)
+                    ? List.of(userId)
+                    : List.of();
+        });
+
+        mockMvc.perform(post("/api/offers")
+                        .header(HttpHeaders.AUTHORIZATION, EDITOR_AUTHORIZATION)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(offerJson(category.get("id").asText(), "Eligible Merchant " + suffix, "ONLINE", "CARD_IDS",
+                                "[\"" + matchingCardProductId + "\"]", null, null)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/offers")
+                        .header(HttpHeaders.AUTHORIZATION, EDITOR_AUTHORIZATION)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(offerJson(category.get("id").asText(), "Other Merchant " + suffix, "ONLINE", "CARD_IDS",
+                                "[\"" + otherCardProductId + "\"]", null, null)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/offers/available-for-me")
+                        .header(HttpHeaders.AUTHORIZATION, USER_AUTHORIZATION)
+                        .param("categoryId", category.get("id").asText())
+                        .param("keyword", suffix))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].merchantName").value("Eligible Merchant " + suffix));
+    }
+
+    @Test
     void rejectsInvalidOfferRules() throws Exception {
         String suffix = UUID.randomUUID().toString();
         JsonNode category = createCategory("invalid-" + suffix, "Invalid " + suffix);
@@ -146,10 +198,8 @@ class OfferControllerIntegrationTests {
                         .header(HttpHeaders.AUTHORIZATION, ADMIN_AUTHORIZATION)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(offerJson(category.get("id").asText(), "Criteria All " + suffix, "ONLINE", "CRITERIA", "[]", null, null)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.targetIssuers", hasSize(0)))
-                .andExpect(jsonPath("$.targetNetworks", hasSize(0)))
-                .andExpect(jsonPath("$.targetTypes", hasSize(0)));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("CRITERIA eligibility requires at least one criterion."));
     }
 
     @Test

@@ -45,6 +45,18 @@ public class OfferController {
         return offerService.listOffers(categoryId, type, eligibilityMode, status, keyword);
     }
 
+    @GetMapping("/available-for-me")
+    public List<OfferResponse> availableForMe(
+            @RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) OfferType type,
+            @RequestParam(required = false) OfferEligibilityMode eligibilityMode,
+            @RequestParam(required = false) OfferStatus status,
+            @RequestParam(required = false) String keyword) {
+        UUID userId = securityService.requireUserUuid(authorization);
+        return offerService.listOffersAvailableForUser(userId, categoryId, type, eligibilityMode, status, keyword);
+    }
+
     @GetMapping("/{id}")
     public OfferResponse get(@PathVariable UUID id) {
         return offerService.getOffer(id);
