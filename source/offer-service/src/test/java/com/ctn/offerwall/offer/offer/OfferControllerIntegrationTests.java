@@ -70,7 +70,7 @@ class OfferControllerIntegrationTests {
     @Test
     void createsOfferAndFiltersList() throws Exception {
         String suffix = UUID.randomUUID().toString();
-        JsonNode category = createCategory("dining-" + suffix, "Dining " + suffix);
+        JsonNode category = createCategory("Dining " + suffix);
         String merchantName = "Stage5 Merchant " + suffix;
 
         String offerResponse = mockMvc.perform(post("/api/offers")
@@ -113,7 +113,7 @@ class OfferControllerIntegrationTests {
     @Test
     void createsCardIdAndCriteriaOffers() throws Exception {
         String suffix = UUID.randomUUID().toString();
-        JsonNode category = createCategory("cards-" + suffix, "Cards " + suffix);
+        JsonNode category = createCategory("Cards " + suffix);
         UUID cardProductId = UUID.randomUUID();
 
         mockMvc.perform(post("/api/offers")
@@ -139,7 +139,7 @@ class OfferControllerIntegrationTests {
     @Test
     void filtersAvailableOffersForCurrentUser() throws Exception {
         String suffix = UUID.randomUUID().toString();
-        JsonNode category = createCategory("available-" + suffix, "Available " + suffix);
+        JsonNode category = createCategory("Available " + suffix);
         UUID userId = UUID.fromString(USER_ID);
         UUID matchingCardProductId = UUID.randomUUID();
         UUID otherCardProductId = UUID.randomUUID();
@@ -182,7 +182,7 @@ class OfferControllerIntegrationTests {
     @Test
     void rejectsInvalidOfferRules() throws Exception {
         String suffix = UUID.randomUUID().toString();
-        JsonNode category = createCategory("invalid-" + suffix, "Invalid " + suffix);
+        JsonNode category = createCategory("Invalid " + suffix);
 
         mockMvc.perform(post("/api/offers")
                         .header(HttpHeaders.AUTHORIZATION, ADMIN_AUTHORIZATION)
@@ -209,19 +209,19 @@ class OfferControllerIntegrationTests {
     @Test
     void managesCategoriesAndPreventsDeletingUsedCategory() throws Exception {
         String suffix = UUID.randomUUID().toString();
-        JsonNode category = createCategory("shopping-" + suffix, "Shopping " + suffix);
+        JsonNode category = createCategory("Shopping " + suffix);
 
         mockMvc.perform(post("/api/offer-categories")
                         .header(HttpHeaders.AUTHORIZATION, ADMIN_AUTHORIZATION)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(categoryJson("shopping-" + suffix, "Shopping Duplicate " + suffix)))
+                        .content(categoryJson("Shopping " + suffix)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("Offer category code already exists."));
 
         mockMvc.perform(put("/api/offer-categories/{id}", category.get("id").asText())
                         .header(HttpHeaders.AUTHORIZATION, EDITOR_AUTHORIZATION)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(categoryJson("shopping-updated-" + suffix, "Shopping Updated " + suffix)))
+                        .content(categoryJson("Shopping Updated " + suffix)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("shopping-updated-" + suffix));
 
@@ -246,11 +246,11 @@ class OfferControllerIntegrationTests {
                 .andExpect(jsonPath("$.message").value("Offer category is in use."));
     }
 
-    private JsonNode createCategory(String code, String name) throws Exception {
+    private JsonNode createCategory(String name) throws Exception {
         String response = mockMvc.perform(post("/api/offer-categories")
                         .header(HttpHeaders.AUTHORIZATION, ADMIN_AUTHORIZATION)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(categoryJson(code, name)))
+                        .content(categoryJson(name)))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -258,14 +258,13 @@ class OfferControllerIntegrationTests {
         return objectMapper.readTree(response);
     }
 
-    private String categoryJson(String code, String name) {
+    private String categoryJson(String name) {
         return """
                 {
-                  "code": "%s",
                   "name": "%s",
                   "description": "Test category"
                 }
-                """.formatted(code, name);
+                """.formatted(name);
     }
 
     private String offerJson(String categoryId,

@@ -5,10 +5,6 @@ import jakarta.validation.constraints.Size;
 
 public record OfferCategoryRequest(
         @NotBlank
-        @Size(max = 80)
-        String code,
-
-        @NotBlank
         @Size(max = 160)
         String name,
 

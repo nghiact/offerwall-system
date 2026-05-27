@@ -48,6 +48,13 @@ spring:
               predicates:
                 - Path=/api/eligibility/**
 
+            - id: business-events-service
+              uri: http://localhost:8084
+              predicates:
+                - Path=/api/business-events
+              filters:
+                - SetPath=/api/tracking/events
+
             - id: tracking-service
               uri: http://localhost:8084
               predicates:

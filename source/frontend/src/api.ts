@@ -11,7 +11,7 @@ export class ApiError extends Error {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || defaultApiBaseUrl();
 
 export async function apiRequest<T>(
   path: string,
@@ -29,12 +29,17 @@ export async function apiRequest<T>(
     headers.Authorization = `Bearer ${options.token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: options.method ?? "GET",
-    headers,
-    credentials: "include",
-    body: options.body === undefined ? undefined : JSON.stringify(options.body)
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: options.method ?? "GET",
+      headers,
+      credentials: "include",
+      body: options.body === undefined ? undefined : JSON.stringify(options.body)
+    });
+  } catch (error) {
+    throw new ApiError(0, `Cannot reach API at ${API_BASE_URL}${path}`, error);
+  }
 
   if (response.status === 204) {
     return undefined as T;
@@ -49,4 +54,9 @@ export async function apiRequest<T>(
   }
 
   return data as T;
+}
+
+function defaultApiBaseUrl() {
+  const host = window.location.hostname === "0.0.0.0" ? "localhost" : window.location.hostname;
+  return `${window.location.protocol}//${host}:8080`;
 }

@@ -2,6 +2,7 @@ import {
   Activity,
   Bell,
   CreditCard,
+  Pencil,
   LogIn,
   LogOut,
   Moon,
@@ -12,6 +13,7 @@ import {
   Tags,
   Ticket,
   Trash2,
+  X,
   UserPlus
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -22,6 +24,7 @@ import {
   CardProduct,
   CardType,
   NotificationCampaign,
+  NotificationPriority,
   Offer,
   OfferCategory,
   OfferEligibilityMode,
@@ -35,22 +38,36 @@ const cardNetworks: CardNetwork[] = ["VISA", "MASTERCARD", "JCB", "UNIONPAY", "A
 const cardTypes: CardType[] = ["CREDIT", "DEBIT", "PREPAID", "HYBRID"];
 const offerTypes: OfferType[] = ["ONLINE", "OFFLINE", "BOTH"];
 const eligibilityModes: OfferEligibilityMode[] = ["ALL", "CARD_IDS", "CRITERIA"];
+const tierLabels: Record<CardNetwork, string[]> = {
+  VISA: ["Classic", "Gold", "Platinum", "Signature", "Infinite", "Infinite Privilege"],
+  MASTERCARD: ["Standard", "Gold", "Platinum", "World", "World Elite", "World Legend"],
+  JCB: ["Standard", "Gold", "Platinum", "Ultimate", "Ultimate", "The Class"],
+  UNIONPAY: ["Standard", "Gold", "Platinum", "Diamond", "Infinite", "Infinite Privilege"],
+  AMEX: ["Green", "Gold", "Platinum", "Platinum", "Centurion", "Centurion Black"],
+  NAPAS: ["Standard", "Gold", "Platinum", "Tier 4", "Tier 5", "Tier 6"]
+};
 
 const emptyCardForm = {
   issuer: "",
   name: "",
   network: "VISA" as CardNetwork,
-  tier: 2,
+  tier: 1,
   tierLabelOverride: "",
   type: "CREDIT" as CardType,
   personal: true,
   bins: ""
 };
 
+type CardForm = typeof emptyCardForm;
+
 const emptyCategoryForm = {
-  code: "",
   name: "",
   description: ""
+};
+
+const emptyManualNotificationForm = {
+  body: "",
+  priority: "NORMAL" as NotificationPriority
 };
 
 const emptyOfferForm = {
@@ -62,7 +79,7 @@ const emptyOfferForm = {
   startTime: "2026-05-27T00:00",
   endTime: "2026-06-30T23:59",
   offerType: "BOTH" as OfferType,
-  eligibilityMode: "CRITERIA" as OfferEligibilityMode,
+  eligibilityMode: "ALL" as OfferEligibilityMode,
   targetCardProductIds: "",
   targetIssuers: "",
   targetNetworks: "VISA",
@@ -81,12 +98,15 @@ function App() {
   const [tab, setTab] = useState<Tab>("offers");
   const [dark, setDark] = useState(() => localStorage.getItem("offerwall.theme") === "dark");
   const [status, setStatus] = useState("Ready");
+  const [toastVisible, setToastVisible] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const [cards, setCards] = useState<CardProduct[]>([]);
   const [cardMatches, setCardMatches] = useState<CardProduct[]>([]);
   const [cardPrefix, setCardPrefix] = useState("4204");
   const [cardForm, setCardForm] = useState(emptyCardForm);
+  const [editingCard, setEditingCard] = useState<CardProduct | null>(null);
+  const [cardEditForm, setCardEditForm] = useState(emptyCardForm);
 
   const [categories, setCategories] = useState<OfferCategory[]>([]);
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm);
@@ -94,11 +114,28 @@ function App() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [offerForm, setOfferForm] = useState(emptyOfferForm);
   const [offerKeyword, setOfferKeyword] = useState("");
+  const [offerProductSearch, setOfferProductSearch] = useState("");
 
   const [events, setEvents] = useState<BusinessEvent[]>([]);
   const [campaigns, setCampaigns] = useState<NotificationCampaign[]>([]);
+  const [manualNotificationOpen, setManualNotificationOpen] = useState(false);
+  const [manualNotificationForm, setManualNotificationForm] = useState(emptyManualNotificationForm);
 
   const isAdmin = useMemo(() => user?.roles.includes("ADMIN") || user?.roles.includes("EDITOR"), [user]);
+  const selectedOfferProducts = useMemo(() => {
+    const selectedIds = new Set(splitList(offerForm.targetCardProductIds));
+    return cards.filter((card) => selectedIds.has(card.id));
+  }, [cards, offerForm.targetCardProductIds]);
+  const offerProductMatches = useMemo(() => {
+    const query = offerProductSearch.trim().toLowerCase();
+    if (!query) {
+      return [];
+    }
+    const selectedIds = new Set(splitList(offerForm.targetCardProductIds));
+    return cards
+      .filter((card) => !selectedIds.has(card.id) && card.productCode.toLowerCase().includes(query))
+      .slice(0, 8);
+  }, [cards, offerForm.targetCardProductIds, offerProductSearch]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
@@ -109,15 +146,24 @@ function App() {
     if (!token) {
       return;
     }
-    void loadCurrentUser();
+    void loadCurrentUser().catch((error) => handleStartupError(error));
   }, [token]);
 
   useEffect(() => {
-    if (!token) {
+    if (!token || !user) {
       return;
     }
-    void loadAll();
-  }, [token]);
+    void loadAll().catch((error) => handleStartupError(error));
+  }, [token, user]);
+
+  useEffect(() => {
+    if (!token || status === "Ready") {
+      return;
+    }
+    setToastVisible(true);
+    const timeout = window.setTimeout(() => setToastVisible(false), 3600);
+    return () => window.clearTimeout(timeout);
+  }, [status, token]);
 
   async function run(action: () => Promise<void>, success: string) {
     setBusy(true);
@@ -142,8 +188,39 @@ function App() {
     setUser(profile);
   }
 
+  function handleStartupError(error: unknown) {
+    if (error instanceof ApiError && error.status === 401) {
+      localStorage.removeItem("offerwall.accessToken");
+      setToken("");
+      setUser(null);
+      setStatus("Session expired. Log in again.");
+      return;
+    }
+
+    if (error instanceof ApiError) {
+      setStatus(`${error.status}: ${error.message}`);
+    } else if (error instanceof Error) {
+      setStatus(error.message);
+    } else {
+      setStatus("Startup request failed");
+    }
+  }
+
   async function loadAll() {
-    await Promise.all([loadCards(), loadCategories(), loadOffers(), loadTracking(), loadCampaigns()]);
+    const loads = [
+      ["cards", loadCards],
+      ["categories", loadCategories],
+      ["offers", loadOffers],
+      ["tracking", loadTracking],
+      ["notifications", loadCampaigns]
+    ] as const;
+    const results = await Promise.allSettled(loads.map(([, load]) => load()));
+    const failed = results
+      .map((result, index) => (result.status === "rejected" ? `${loads[index][0]} (${formatError(result.reason)})` : null))
+      .filter(Boolean);
+    if (failed.length > 0) {
+      throw new Error(`Refresh failed: ${failed.join(", ")}`);
+    }
   }
 
   async function submitAuth(event: FormEvent) {
@@ -197,13 +274,7 @@ function App() {
       await apiRequest<CardProduct>("/api/cards", {
         method: "POST",
         token,
-        body: {
-          ...cardForm,
-          name: blankToNull(cardForm.name),
-          tier: Number(cardForm.tier),
-          tierLabelOverride: blankToNull(cardForm.tierLabelOverride),
-          bins: splitList(cardForm.bins)
-        }
+        body: cardFormPayload(cardForm)
       });
       setCardForm(emptyCardForm);
       await loadCards();
@@ -215,6 +286,38 @@ function App() {
       await apiRequest<void>(`/api/cards/${cardId}`, { method: "DELETE", token });
       await loadCards();
     }, "Card deleted");
+  }
+
+  function openCardEditor(card: CardProduct) {
+    setEditingCard(card);
+    setCardEditForm(cardToForm(card));
+  }
+
+  function closeCardEditor() {
+    setEditingCard(null);
+    setCardEditForm(emptyCardForm);
+  }
+
+  async function updateCard(event: FormEvent) {
+    event.preventDefault();
+    if (!editingCard) {
+      return;
+    }
+    await run(async () => {
+      await apiRequest<CardProduct>(`/api/cards/${editingCard.id}`, {
+        method: "PUT",
+        token,
+        body: cardFormPayload(cardEditForm)
+      });
+      closeCardEditor();
+      await loadCards();
+      if (cardMatches.length > 0) {
+        const response = await apiRequest<CardProduct[]>(`/api/cards/matches?prefix=${encodeURIComponent(cardPrefix)}`, {
+          token
+        });
+        setCardMatches(response);
+      }
+    }, "Card updated");
   }
 
   async function loadCategories() {
@@ -255,6 +358,8 @@ function App() {
   async function createOffer(event: FormEvent) {
     event.preventDefault();
     await run(async () => {
+      const criteriaMode = offerForm.eligibilityMode === "CRITERIA";
+      const cardIdsMode = offerForm.eligibilityMode === "CARD_IDS";
       await apiRequest<Offer>("/api/offers", {
         method: "POST",
         token,
@@ -268,17 +373,36 @@ function App() {
           endTime: toInstant(offerForm.endTime),
           offerType: offerForm.offerType,
           eligibilityMode: offerForm.eligibilityMode,
-          targetCardProductIds: splitList(offerForm.targetCardProductIds),
-          targetIssuers: splitList(offerForm.targetIssuers),
-          targetNetworks: splitList(offerForm.targetNetworks),
-          targetTier: offerForm.targetTier === "" ? null : Number(offerForm.targetTier),
-          targetTypes: splitList(offerForm.targetTypes),
-          targetPersonal: offerForm.targetPersonal === "" ? null : offerForm.targetPersonal === "true"
+          targetCardProductIds: cardIdsMode ? splitList(offerForm.targetCardProductIds) : [],
+          targetIssuers: criteriaMode ? splitList(offerForm.targetIssuers) : [],
+          targetNetworks: criteriaMode ? splitList(offerForm.targetNetworks) : [],
+          targetTier: criteriaMode && offerForm.targetTier !== "" ? Number(offerForm.targetTier) : null,
+          targetTypes: criteriaMode ? splitList(offerForm.targetTypes) : [],
+          targetPersonal: criteriaMode && offerForm.targetPersonal !== "" ? offerForm.targetPersonal === "true" : null
         }
       });
       setOfferForm((current) => ({ ...emptyOfferForm, categoryId: current.categoryId }));
+      setOfferProductSearch("");
       await Promise.all([loadOffers(), loadTracking()]);
     }, "Offer created");
+  }
+
+  function addOfferProduct(card: CardProduct) {
+    const selectedIds = splitList(offerForm.targetCardProductIds);
+    if (selectedIds.includes(card.id)) {
+      return;
+    }
+    setOfferForm({ ...offerForm, targetCardProductIds: [...selectedIds, card.id].join(",") });
+    setOfferProductSearch("");
+  }
+
+  function removeOfferProduct(cardId: string) {
+    setOfferForm({
+      ...offerForm,
+      targetCardProductIds: splitList(offerForm.targetCardProductIds)
+        .filter((id) => id !== cardId)
+        .join(",")
+    });
   }
 
   async function deleteOffer(offerId: string) {
@@ -289,7 +413,7 @@ function App() {
   }
 
   async function loadTracking() {
-    const response = await apiRequest<BusinessEvent[]>("/api/tracking/events?limit=20");
+    const response = await apiRequest<BusinessEvent[]>("/api/business-events?limit=20", { token });
     setEvents(response);
   }
 
@@ -298,7 +422,18 @@ function App() {
     setCampaigns(response);
   }
 
-  async function createManualNotification() {
+  function openManualNotification() {
+    setManualNotificationForm(emptyManualNotificationForm);
+    setManualNotificationOpen(true);
+  }
+
+  function closeManualNotification() {
+    setManualNotificationOpen(false);
+    setManualNotificationForm(emptyManualNotificationForm);
+  }
+
+  async function createManualNotification(event: FormEvent) {
+    event.preventDefault();
     if (!user) {
       return;
     }
@@ -307,9 +442,9 @@ function App() {
         method: "POST",
         token,
         body: {
-          title: "Admin demo notification",
-          body: "Manual admin notification",
-          priority: "NORMAL",
+          title: "Manual notification",
+          body: manualNotificationForm.body.trim(),
+          priority: manualNotificationForm.priority,
           sendMode: "IMMEDIATE",
           scheduledFor: null,
           offerId: offers[0]?.id ?? null,
@@ -325,28 +460,36 @@ function App() {
           ]
         }
       });
+      closeManualNotification();
       await loadCampaigns();
     }, "Notification created");
   }
 
   async function createOfferEventNotification() {
     await run(async () => {
-      const event = events.find((item) => item.eventType === "OFFER_CREATED");
+      const event = offerCreatedEventForNotification(events);
       if (!event) {
-        throw new Error("No OFFER_CREATED event found");
+        throw new Error("No OFFER_CREATED event found. Create an offer first.");
       }
-      await apiRequest<NotificationCampaign>(`/api/notifications/offer-created-events/${event.eventId}`, {
-        method: "POST",
-        token,
-        body: {
-          priority: "NORMAL",
-          sendMode: "IMMEDIATE",
-          scheduledFor: null,
-          channels: ["IN_APP"],
-          title: null,
-          body: null
+      try {
+        await apiRequest<NotificationCampaign>(`/api/notifications/offer-created-events/${event.eventId}`, {
+          method: "POST",
+          token,
+          body: {
+            priority: "NORMAL",
+            sendMode: "IMMEDIATE",
+            scheduledFor: null,
+            channels: ["IN_APP"],
+            title: null,
+            body: null
+          }
+        });
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 400 && error.message.includes("no eligible recipients")) {
+          throw new Error("No eligible recipients. Add an eligible card to a user wallet, or create an ALL-eligibility offer for this demo.");
         }
-      });
+        throw error;
+      }
       await loadCampaigns();
     }, "Offer notification created");
   }
@@ -417,17 +560,20 @@ function App() {
 
       <section className="workspace">
         <header className="topbar">
-          <StatusLine status={isAdmin ? status : "Admin/editor role required for writes"} busy={busy} />
-          <div className="toolbar">
-            <button type="button" className="icon-button" onClick={() => void run(loadAll, "Refreshed")} title="Refresh">
-              <RefreshCw size={18} />
-            </button>
-            <button type="button" className="icon-button" onClick={() => setDark((value) => !value)} title="Toggle theme">
-              {dark ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-            <button type="button" className="icon-button" onClick={() => void logout()} title="Log out">
-              <LogOut size={18} />
-            </button>
+          <div className="topbar-spacer" />
+          <div className="topbar-actions">
+            <div className="toolbar">
+              <button type="button" className="icon-button" onClick={() => void run(loadAll, "Refreshed")} title="Refresh">
+                <RefreshCw size={18} />
+              </button>
+              <button type="button" className="icon-button" onClick={() => setDark((value) => !value)} title="Toggle theme">
+                {dark ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              <button type="button" className="icon-button" onClick={() => void logout()} title="Log out">
+                <LogOut size={18} />
+              </button>
+            </div>
+            <Toast status={isAdmin ? status : "Admin/editor role required for writes"} busy={busy} visible={toastVisible || busy || !isAdmin} />
           </div>
         </header>
 
@@ -492,30 +638,70 @@ function App() {
                     ))}
                   </select>
                 </label>
-                <label>
-                  Issuers
-                  <input value={offerForm.targetIssuers} onChange={(event) => setOfferForm({ ...offerForm, targetIssuers: event.target.value })} />
-                </label>
-                <label>
-                  Networks
-                  <input value={offerForm.targetNetworks} onChange={(event) => setOfferForm({ ...offerForm, targetNetworks: event.target.value })} />
-                </label>
-                <label>
-                  Min tier
-                  <input value={offerForm.targetTier} onChange={(event) => setOfferForm({ ...offerForm, targetTier: event.target.value })} />
-                </label>
-                <label>
-                  Types
-                  <input value={offerForm.targetTypes} onChange={(event) => setOfferForm({ ...offerForm, targetTypes: event.target.value })} />
-                </label>
-                <label>
-                  Personal
-                  <select value={offerForm.targetPersonal} onChange={(event) => setOfferForm({ ...offerForm, targetPersonal: event.target.value })}>
-                    <option value="">Any</option>
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                  </select>
-                </label>
+                {offerForm.eligibilityMode === "CARD_IDS" && (
+                  <div className="wide selector-block">
+                    <label>
+                      Product code
+                      <input
+                        value={offerProductSearch}
+                        onChange={(event) => setOfferProductSearch(event.target.value)}
+                        placeholder="Search product code"
+                      />
+                    </label>
+                    {offerProductMatches.length > 0 && (
+                      <ul className="selector-list">
+                        {offerProductMatches.map((card) => (
+                          <li key={card.id}>
+                            <button type="button" onClick={() => addOfferProduct(card)}>
+                              <Plus size={16} />
+                              <span>{card.productCode}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {selectedOfferProducts.length > 0 && (
+                      <ul className="chip-list">
+                        {selectedOfferProducts.map((card) => (
+                          <li key={card.id}>
+                            <span>{card.productCode}</span>
+                            <button type="button" onClick={() => removeOfferProduct(card.id)} title="Remove product">
+                              <Trash2 size={14} />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {offerForm.eligibilityMode === "CRITERIA" && (
+                  <>
+                    <label>
+                      Issuers
+                      <input value={offerForm.targetIssuers} onChange={(event) => setOfferForm({ ...offerForm, targetIssuers: event.target.value })} />
+                    </label>
+                    <label>
+                      Networks
+                      <input value={offerForm.targetNetworks} onChange={(event) => setOfferForm({ ...offerForm, targetNetworks: event.target.value })} />
+                    </label>
+                    <label>
+                      Min tier
+                      <input value={offerForm.targetTier} onChange={(event) => setOfferForm({ ...offerForm, targetTier: event.target.value })} />
+                    </label>
+                    <label>
+                      Types
+                      <input value={offerForm.targetTypes} onChange={(event) => setOfferForm({ ...offerForm, targetTypes: event.target.value })} />
+                    </label>
+                    <label>
+                      Personal
+                      <select value={offerForm.targetPersonal} onChange={(event) => setOfferForm({ ...offerForm, targetPersonal: event.target.value })}>
+                        <option value="">Any</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    </label>
+                  </>
+                )}
                 <button className="primary wide" type="submit" disabled={busy || !isAdmin} title="Create offer">
                   <Plus size={18} />
                   Create offer
@@ -552,10 +738,6 @@ function App() {
             <Panel title="Create Category">
               <form onSubmit={createCategory} className="stack">
                 <label>
-                  Code
-                  <input value={categoryForm.code} onChange={(event) => setCategoryForm({ ...categoryForm, code: event.target.value })} />
-                </label>
-                <label>
                   Name
                   <input value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} />
                 </label>
@@ -589,49 +771,11 @@ function App() {
         )}
 
         {tab === "cards" && (
-          <section className="grid two">
-            <Panel title="Create Card">
-              <form onSubmit={createCard} className="form-grid">
-                <label>
-                  Issuer
-                  <input value={cardForm.issuer} onChange={(event) => setCardForm({ ...cardForm, issuer: event.target.value })} />
-                </label>
-                <label>
-                  Name
-                  <input value={cardForm.name} onChange={(event) => setCardForm({ ...cardForm, name: event.target.value })} />
-                </label>
-                <label>
-                  Network
-                  <select value={cardForm.network} onChange={(event) => setCardForm({ ...cardForm, network: event.target.value as CardNetwork })}>
-                    {cardNetworks.map((value) => (
-                      <option key={value}>{value}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Tier
-                  <input type="number" min="0" max="5" value={cardForm.tier} onChange={(event) => setCardForm({ ...cardForm, tier: Number(event.target.value) })} />
-                </label>
-                <label>
-                  Type
-                  <select value={cardForm.type} onChange={(event) => setCardForm({ ...cardForm, type: event.target.value as CardType })}>
-                    {cardTypes.map((value) => (
-                      <option key={value}>{value}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Tier label override
-                  <input value={cardForm.tierLabelOverride} onChange={(event) => setCardForm({ ...cardForm, tierLabelOverride: event.target.value })} />
-                </label>
-                <label>
-                  BINs
-                  <input value={cardForm.bins} onChange={(event) => setCardForm({ ...cardForm, bins: event.target.value })} />
-                </label>
-                <label className="check">
-                  <input type="checkbox" checked={cardForm.personal} onChange={(event) => setCardForm({ ...cardForm, personal: event.target.checked })} />
-                  Personal
-                </label>
+          <>
+            <section className="grid two">
+              <Panel title="Create Card">
+                <form onSubmit={createCard} className="form-grid">
+                  <CardFields form={cardForm} setForm={setCardForm} />
                 <button className="primary wide" type="submit" disabled={busy} title="Create card">
                   <Plus size={18} />
                   Create card
@@ -650,24 +794,49 @@ function App() {
                   <li key={card.id} className="item">
                     <div>
                       <strong>{card.displayName}</strong>
-                      <span>{card.network} · tier {card.tier} · {card.type}</span>
+                      <span>{card.network} · tier {apiTierToUiTier(card.tier)} ({card.tierLabel}) · {card.type}</span>
                       <small>{card.bins.map((bin) => bin.bin).join(", ")}</small>
                     </div>
-                    <button type="button" className="icon-button danger" onClick={() => void deleteCard(card.id)} title="Delete card">
-                      <Trash2 size={18} />
-                    </button>
+                    <div className="item-actions">
+                      <button type="button" className="icon-button" onClick={() => openCardEditor(card)} title="Edit card">
+                        <Pencil size={18} />
+                      </button>
+                      <button type="button" className="icon-button danger" onClick={() => void deleteCard(card.id)} title="Delete card">
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </li>
                 ))}
               </List>
             </Panel>
-          </section>
+            </section>
+            {editingCard && (
+              <div className="modal-backdrop" role="presentation">
+                <section className="modal" role="dialog" aria-modal="true" aria-labelledby="edit-card-title">
+                  <header className="modal-header">
+                    <h2 id="edit-card-title">Edit Card</h2>
+                    <button type="button" className="icon-button" onClick={closeCardEditor} title="Close">
+                      <X size={18} />
+                    </button>
+                  </header>
+                  <form onSubmit={updateCard} className="form-grid">
+                    <CardFields form={cardEditForm} setForm={setCardEditForm} />
+                    <button className="primary wide" type="submit" disabled={busy} title="Save card">
+                      <Pencil size={18} />
+                      Save card
+                    </button>
+                  </form>
+                </section>
+              </div>
+            )}
+          </>
         )}
 
         {tab === "notifications" && (
           <section className="grid two">
             <Panel title="Actions">
               <div className="stack">
-                <button type="button" className="primary" onClick={() => void createManualNotification()} title="Create manual notification">
+                <button type="button" className="primary" onClick={openManualNotification} title="Create manual notification">
                   <Bell size={18} />
                   Manual notification
                 </button>
@@ -690,6 +859,44 @@ function App() {
                 ))}
               </List>
             </Panel>
+            {manualNotificationOpen && (
+              <div className="modal-backdrop" role="presentation">
+                <section className="modal" role="dialog" aria-modal="true" aria-labelledby="manual-notification-title">
+                  <header className="modal-header">
+                    <h2 id="manual-notification-title">Manual Notification</h2>
+                    <button type="button" className="icon-button" onClick={closeManualNotification} title="Close">
+                      <X size={18} />
+                    </button>
+                  </header>
+                  <form onSubmit={createManualNotification} className="stack">
+                    <label>
+                      Body
+                      <textarea
+                        required
+                        value={manualNotificationForm.body}
+                        onChange={(event) => setManualNotificationForm({ ...manualNotificationForm, body: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      Priority
+                      <select
+                        value={manualNotificationForm.priority}
+                        onChange={(event) =>
+                          setManualNotificationForm({ ...manualNotificationForm, priority: event.target.value as NotificationPriority })
+                        }
+                      >
+                        <option value="NORMAL">Normal</option>
+                        <option value="HIGH">Override</option>
+                      </select>
+                    </label>
+                    <button className="primary" type="submit" disabled={busy || !manualNotificationForm.body.trim()} title="Send notification">
+                      <Bell size={18} />
+                      Send notification
+                    </button>
+                  </form>
+                </section>
+              </div>
+            )}
           </section>
         )}
 
@@ -756,6 +963,78 @@ function StatusLine({ status, busy }: { status: string; busy: boolean }) {
   );
 }
 
+function Toast({ status, busy, visible }: { status: string; busy: boolean; visible: boolean }) {
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <div className="toast" role="status" aria-live="polite">
+      <span className={busy ? "dot pulse" : "dot"} />
+      {status}
+    </div>
+  );
+}
+
+function CardFields({ form, setForm }: { form: CardForm; setForm: (form: CardForm) => void }) {
+  return (
+    <>
+      <label>
+        Issuer
+        <input value={form.issuer} onChange={(event) => setForm({ ...form, issuer: event.target.value })} />
+      </label>
+      <label>
+        Name
+        <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+      </label>
+      <label>
+        Network
+        <select
+          value={form.network}
+          onChange={(event) => {
+            const network = event.target.value as CardNetwork;
+            setForm({ ...form, network, tier: firstTierForNetwork(network) });
+          }}
+        >
+          {cardNetworks.map((value) => (
+            <option key={value}>{value}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Tier
+        <select value={form.tier} onChange={(event) => setForm({ ...form, tier: Number(event.target.value) })}>
+          {tierOptionsForNetwork(form.network).map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Type
+        <select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as CardType })}>
+          {cardTypes.map((value) => (
+            <option key={value}>{value}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Tier label override
+        <input value={form.tierLabelOverride} onChange={(event) => setForm({ ...form, tierLabelOverride: event.target.value })} />
+      </label>
+      <label>
+        BINs
+        <input value={form.bins} onChange={(event) => setForm({ ...form, bins: event.target.value })} />
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={form.personal} onChange={(event) => setForm({ ...form, personal: event.target.checked })} />
+        Personal
+      </label>
+    </>
+  );
+}
+
 function splitList(value: string) {
   return value
     .split(",")
@@ -766,6 +1045,63 @@ function splitList(value: string) {
 function blankToNull(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function formatError(error: unknown) {
+  if (error instanceof ApiError) {
+    return error.status === 0 ? error.message : `${error.status}: ${error.message}`;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "unknown error";
+}
+
+function offerCreatedEventForNotification(events: BusinessEvent[]) {
+  const offerEvents = events.filter((event) => event.eventType === "OFFER_CREATED");
+  return offerEvents.find((event) => event.metadata?.eligibilityMode === "ALL") ?? offerEvents[0] ?? null;
+}
+
+function cardToForm(card: CardProduct): CardForm {
+  return {
+    issuer: card.issuer,
+    name: card.name ?? "",
+    network: card.network,
+    tier: apiTierToUiTier(card.tier),
+    tierLabelOverride: card.tierLabelOverride ?? "",
+    type: card.type,
+    personal: card.personal,
+    bins: card.bins.map((bin) => bin.bin).join(", ")
+  };
+}
+
+function cardFormPayload(form: CardForm) {
+  return {
+    ...form,
+    name: blankToNull(form.name),
+    tier: uiTierToApiTier(form.tier),
+    tierLabelOverride: blankToNull(form.tierLabelOverride),
+    bins: splitList(form.bins)
+  };
+}
+
+function tierOptionsForNetwork(network: CardNetwork) {
+  return tierLabels[network].map((label, index) => ({
+    value: index + 1,
+    label
+  }));
+}
+
+function firstTierForNetwork(network: CardNetwork) {
+  return tierOptionsForNetwork(network)[0]?.value ?? 1;
+}
+
+function uiTierToApiTier(tier: number) {
+  return tier - 1;
+}
+
+function apiTierToUiTier(tier: number) {
+  return tier + 1;
 }
 
 function toInstant(value: string) {

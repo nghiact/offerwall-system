@@ -6,18 +6,26 @@ import com.ctn.offerwall.offer.domain.OfferCategory;
 import com.ctn.offerwall.offer.exception.CategoryInUseException;
 import com.ctn.offerwall.offer.exception.CategoryNotFoundException;
 import com.ctn.offerwall.offer.exception.DuplicateCategoryCodeException;
+import com.ctn.offerwall.offer.exception.UserInputException;
 import com.ctn.offerwall.offer.repository.OfferCategoryRepository;
 import com.ctn.offerwall.offer.repository.OfferRepository;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 public class OfferCategoryService {
+
+    private static final int MAX_CODE_LENGTH = 80;
+    private static final Pattern DIACRITICS = Pattern.compile("\\p{M}+");
+    private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-z0-9]+");
+    private static final Pattern EDGE_HYPHENS = Pattern.compile("^-+|-+$");
 
     private final OfferCategoryRepository categoryRepository;
     private final OfferRepository offerRepository;
@@ -41,7 +49,7 @@ public class OfferCategoryService {
 
     @Transactional
     public OfferCategoryResponse createCategory(OfferCategoryRequest request) {
-        String code = normalizeCode(request.code());
+        String code = codeFromName(request.name());
         validateCodeAvailable(code, null);
 
         OfferCategory category = new OfferCategory(
@@ -55,7 +63,7 @@ public class OfferCategoryService {
     @Transactional
     public OfferCategoryResponse updateCategory(UUID id, OfferCategoryRequest request) {
         OfferCategory category = findCategory(id);
-        String code = normalizeCode(request.code());
+        String code = codeFromName(request.name());
         validateCodeAvailable(code, id);
 
         category.update(
@@ -80,8 +88,17 @@ public class OfferCategoryService {
                 .orElseThrow(() -> new CategoryNotFoundException("Offer category was not found."));
     }
 
-    private String normalizeCode(String code) {
-        return code.trim().toLowerCase(Locale.ROOT);
+    private String codeFromName(String name) {
+        String normalized = Normalizer.normalize(name.trim().toLowerCase(Locale.ROOT), Normalizer.Form.NFD);
+        String withoutDiacritics = DIACRITICS.matcher(normalized).replaceAll("");
+        String code = EDGE_HYPHENS.matcher(NON_ALPHANUMERIC.matcher(withoutDiacritics).replaceAll("-")).replaceAll("");
+        if (code.isBlank()) {
+            throw new UserInputException("Offer category name must contain letters or numbers.");
+        }
+        if (code.length() <= MAX_CODE_LENGTH) {
+            return code;
+        }
+        return EDGE_HYPHENS.matcher(code.substring(0, MAX_CODE_LENGTH)).replaceAll("");
     }
 
     private void validateCodeAvailable(String code, UUID currentCategoryId) {
