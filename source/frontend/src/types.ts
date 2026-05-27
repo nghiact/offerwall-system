@@ -44,6 +44,13 @@ export interface CardProduct {
   displayName: string;
 }
 
+export interface WalletCard {
+  id: string;
+  cardProductId: string;
+  createdAt: string;
+  cardProduct: Omit<CardProduct, "bins" | "matchedBins"> | null;
+}
+
 export interface OfferCategory {
   id: string;
   code: string;
@@ -106,4 +113,20 @@ export interface NotificationDelivery {
   status: string;
   sentAt: string | null;
   readAt: string | null;
+}
+
+export interface InAppNotification {
+  deliveryId: string;
+  campaignId: string;
+  recipientUserId: string;
+  title: string;
+  body: string;
+  priority: NotificationPriority;
+  offerId: string | null;
+  sourceEventId: string | null;
+  status: string;
+  preferenceBypassed: boolean;
+  sentAt: string | null;
+  readAt: string | null;
+  createdAt: string;
 }
