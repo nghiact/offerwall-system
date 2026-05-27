@@ -18,5 +18,7 @@ public interface OfferRepository extends JpaRepository<Offer, UUID> {
     @EntityGraph(attributePaths = {"category", "targetCardProductIds", "targetIssuers", "targetNetworks", "targetTypes"})
     Optional<Offer> findById(UUID id);
 
+    Optional<Offer> findByMerchantNameIgnoreCaseAndOfferSummary(String merchantName, String offerSummary);
+
     boolean existsByCategoryId(UUID categoryId);
 }

@@ -14,6 +14,20 @@ spring:
       server:
         webflux:
           routes:
+            - id: user-auth-service
+              uri: http://localhost:8081
+              predicates:
+                - Path=/api/auth/**
+              filters:
+                - StripPrefix=1
+
+            - id: current-user-service
+              uri: http://localhost:8081
+              predicates:
+                - Path=/api/users/me/**
+              filters:
+                - StripPrefix=1
+
             - id: user-service
               uri: http://localhost:8081
               predicates:

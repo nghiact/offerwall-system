@@ -31,4 +31,11 @@ class CardDisplayFormatterTests {
 
         assertThat(formatter.displayName(card)).isEqualTo("Localbank Napas Platinum debit card");
     }
+
+    @Test
+    void formatsJcbTierFourAsUltimate() {
+        CardProduct card = new CardProduct("mb-jcb", "MB", null, CardNetwork.JCB, 4, null, CardType.CREDIT, true, java.util.List.of("35677255"));
+
+        assertThat(formatter.displayName(card)).isEqualTo("MB JCB Ultimate credit card");
+    }
 }

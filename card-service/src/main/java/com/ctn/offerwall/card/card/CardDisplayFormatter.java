@@ -64,7 +64,7 @@ public class CardDisplayFormatter {
         Map<CardNetwork, String[]> labels = new EnumMap<>(CardNetwork.class);
         labels.put(CardNetwork.VISA, new String[]{"Classic", "Gold", "Platinum", "Signature", "Infinite", "Infinite Privilege"});
         labels.put(CardNetwork.MASTERCARD, new String[]{"Standard", "Gold", "Platinum", "World", "World Elite", "World Legend"});
-        labels.put(CardNetwork.JCB, new String[]{"Standard", "Gold", "Platinum", "Ultimate", "World Elite", "The Class"});
+        labels.put(CardNetwork.JCB, new String[]{"Standard", "Gold", "Platinum", "Ultimate", "Ultimate", "The Class"});
         labels.put(CardNetwork.UNIONPAY, new String[]{"Standard", "Gold", "Platinum", "Diamond", "Infinite", "Infinite Privilege"});
         labels.put(CardNetwork.AMEX, new String[]{"Green", "Gold", "Platinum", "Platinum", "Centurion", "Centurion Black"});
         labels.put(CardNetwork.NAPAS, new String[]{"Standard", "Gold", "Platinum", "", "", ""});

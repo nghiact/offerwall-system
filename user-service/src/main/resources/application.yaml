@@ -17,6 +17,8 @@ spring:
     open-in-view: false
 
 offerwall:
+  seed:
+    enabled: false
   auth:
     access-token-ttl: 15m
     refresh-token-ttl: 30d
